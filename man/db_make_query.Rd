@@ -10,7 +10,7 @@ db_make_query(...)
 \item{...}{\verb{[character]} \cr Strings representing the parts of a query.}
 }
 \value{
-A string with a query, to be used, for instance, within \code{DBI::dbExecute}.
+A string with a query, to be used, for instance, within \code{DBI::dbExecute()}.
 }
 \description{
 Helper function to easily concatenate strings and prepare queries for
@@ -24,7 +24,7 @@ query1 <- db_make_query(
 SELECT *
 FROM
 \"Topography\".\"Sweden_Vagkartan_Roads_lines\"
-WHERE ", paste(conditions, collapse = "AND "))
+WHERE ", paste(conditions, collapse = "AND "), ";")
 query1
 # to execute, first one needs a connection 'con' to PostgreSQL, then it can be run as
 # DBI::dbExecute(con, query1)

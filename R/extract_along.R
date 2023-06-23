@@ -40,8 +40,10 @@ extract_along <- function(r, sl, ws,
 
   #all other variables
   summaries <- as.data.frame(do.call("rbind", lapply(ext_val_split, get_summary, y = ws)))
-  names(summaries) <- c(step_id,
-                        paste0(prefix, unlist(lapply(strsplit(colnames(ext_val_rep)[-1], split="@"), function(x) x[1])), "_", ws[-1]))
+
+  colnames(summaries) <- c(step_id,
+                           paste0(prefix,
+                                  sapply(strsplit(colnames(ext_val_rep)[-1], split="@"), function(x) x[1]), "_", ws[-1]))
 
   summaries[,1] <- sl[[step_id]]
   return(summaries)
@@ -52,9 +54,10 @@ extract_along <- function(r, sl, ws,
 get_summary <- function(x, y){
 
   toto <- function(a,b,c){
-    if (c[a]=="mean"){ res <- mean(b[,a], na.rm=T)}
-    if (c[a]=="max") { res <- max(b[,a], na.rm=T)}
-    if (c[a]=="min") { res <- min(b[,a], na.rm=T)}
+    if (c[a]=="mean"){ res <- base::mean(b[,a], na.rm=T) }
+    if (c[a]=="max") { res <- base::max(b[,a], na.rm=T) }
+    if (c[a]=="min") { res <- base::min(b[,a], na.rm=T) }
+    if (c[a]=="sum") { res <- base::sum(b[,a], na.rm=T) }
     return(res)
   }
   res <- unlist(lapply(c(1:ncol(x)), toto, b = x, c = y))

@@ -8,6 +8,7 @@
 #'
 #' @export
 extract_along <- function(r, sl, ws,
+                          col_step_length = "dist",
                           step_id = "use_ava_data_animals_id",
                           prefix = "along_"){
 
@@ -20,8 +21,12 @@ extract_along <- function(r, sl, ws,
   # we add "mean" to account for the stepID
   ws <- c("mean", unlist(ws))
 
+  # remove NAs
+  whichNA <- which(is.na(sl[[col_step_length]]))
+  whichkeep <- which(!is.na(sl[[col_step_length]]))
+
   # extract values
-  extracted_values <- terra::extract(r, terra::vect(sl))
+  extracted_values <- terra::extract(r, sl[-whichNA,])
   # extracted_values <- terra::extract(r, terra::vect(sl), fun=mean)
   # ext_v <- raster::extract(raster::raster(r), sl)
 
@@ -45,7 +50,15 @@ extract_along <- function(r, sl, ws,
                            paste0(prefix,
                                   sapply(strsplit(colnames(ext_val_rep)[-1], split="@"), function(x) x[1]), "_", ws[-1]))
 
+  # re-add NAs
+  summariesNA <- summaries[1:length(whichNA),]
+  summariesNA[[step_id]] <- sl[[step_id]][whichNA]
+  summariesNA[,!grepl(step_id, colnames(summariesNA))] <- NA
+  summaries <- rbind(summaries, summariesNA)
+  summaries <- summaries[order(c(whichkeep, whichNA)),]
+
   summaries[,1] <- sl[[step_id]]
+
   return(summaries)
 }
 

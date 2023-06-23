@@ -8,6 +8,7 @@ extract_along(
   r,
   sl,
   ws,
+  col_step_length = "dist",
   step_id = "use_ava_data_animals_id",
   prefix = "along_"
 )

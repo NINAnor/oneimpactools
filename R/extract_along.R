@@ -21,7 +21,7 @@ extract_along <- function(r, sl, ws,
   ws <- c("mean", unlist(ws))
 
   # extract values
-  extracted_values <- terra::extract(r, sl)
+  extracted_values <- terra::extract(r, terra::vect(sl))
   # extracted_values <- terra::extract(r, terra::vect(sl), fun=mean)
   # ext_v <- raster::extract(raster::raster(r), sl)
 

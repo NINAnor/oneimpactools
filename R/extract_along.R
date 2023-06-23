@@ -44,7 +44,7 @@ extract_along <- function(r, sl, ws,
   # step_values$max_slope <- tmp
 
   #all other variables
-  summaries <- as.data.frame(do.call("rbind", lapply(ext_val_split, get_summary, y = ws)))
+  summaries <- data.frame(do.call("rbind", lapply(ext_val_split, get_summary, y = ws)))
 
   colnames(summaries) <- c(step_id,
                            paste0(prefix,

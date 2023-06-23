@@ -7,9 +7,9 @@
 #' @param ws List of
 #'
 #' @export
-parallel_extract <- function(r, sl, ws,
-                             step_id = "use_ava_data_animals_id",
-                             prefix = "along_"){
+extract_along <- function(r, sl, ws,
+                          step_id = "use_ava_data_animals_id",
+                          prefix = "along_"){
 
   # check number of summaries
   n_summaries <- sapply(ws, length)
@@ -21,7 +21,7 @@ parallel_extract <- function(r, sl, ws,
   ws <- c("mean", unlist(ws))
 
   # extract values
-  extracted_values <- terra::extract(rasts, sl)
+  extracted_values <- terra::extract(r, sl)
   # extracted_values <- terra::extract(r, terra::vect(sl), fun=mean)
   # ext_v <- raster::extract(raster::raster(r), sl)
 

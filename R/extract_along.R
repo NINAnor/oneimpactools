@@ -1,10 +1,11 @@
 #' Extract values of raster using in parallel
 #'
-#' @param r Stack of `SpatRaster` objects
+#' @param r `[SpatRast]` \cr Set of rasters, in the `SpatRaster` format from [terra].
 #' @param sl Vector of step lines, with a column representing the step id
-#' (stratum) and a LINESTRING geometry for each step. Can be an `sf` or a
-#' `SpatVector` object.
-#' @param ws List of
+#' (stratum or just step number) and a LINESTRING geometry for each step.
+#' Can be a `sf` or a `SpatVector` object.
+#' @param ws List of which summary statistics are to be computed. Currently, only "mean", "max",
+#' "min", and "sum" are implemented.
 #'
 #' @export
 extract_along <- function(r, sl, ws,

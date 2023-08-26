@@ -14,13 +14,14 @@ extract_along(
 )
 }
 \arguments{
-\item{r}{Stack of \code{SpatRaster} objects}
+\item{r}{\verb{[SpatRast]} \cr Set of rasters, in the \code{SpatRaster} format from \link{terra}.}
 
 \item{sl}{Vector of step lines, with a column representing the step id
-(stratum) and a LINESTRING geometry for each step. Can be an \code{sf} or a
-\code{SpatVector} object.}
+(stratum or just step number) and a LINESTRING geometry for each step.
+Can be a \code{sf} or a \code{SpatVector} object.}
 
-\item{ws}{List of}
+\item{ws}{List of which summary statistics are to be computed. Currently, only "mean", "max",
+"min", and "sum" are implemented.}
 }
 \description{
 Extract values of raster using in parallel

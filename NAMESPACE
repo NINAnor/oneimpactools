@@ -2,3 +2,4 @@
 
 export(db_make_query)
 export(extract_along)
+export(grass_set_region)

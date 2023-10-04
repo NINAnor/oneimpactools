@@ -1,0 +1,364 @@
+---
+title: "Computing functionality and connectibity in scenario analyses"
+format: html
+editor: visual
+---
+
+Some text here
+
+```{r setup}
+|eval=FALSE
+
+library(JuliaCall)
+JuliaCall::julia_setup()
+
+JuliaCall::julia_setup(Julia_home)
+```
+
+```{julia}
+|eval=FALSE
+
+using Pkg
+Pkg.add("ConScape")
+```
+
+```{julia}
+using ConScape
+using SparseArrays
+using Statistics
+using Plots
+using LinearAlgebra
+```
+
+# Declare functions
+ 
+```{julia}
+function functionality(grsp;
+                           connectivity_function=ConScape.expected_cost,
+                           distance_transformation=nothing,
+                           diagvalue=nothing)
+
+ # Check that distance_transformation function has been passed if no cost function is saved
+    if distance_transformation === nothing && connectivity_function <: DistanceFunction
+        if grsp.g.costfunction === nothing
+            throw(ArgumentError("no distance_transformation function supplied and cost matrix in Grid isn't based on a cost function."))
+        else
+            distance_transformation = inv(grsp.g.costfunction)
+        end
+    end
+
+    S = connectivity_function(grsp)
+    map!(t -> t<0 ? Inf : t,  S, S)
+
+    if connectivity_function <: ConScape.DistanceFunction
+        map!(distance_transformation, S, S)
+    end
+
+    targetidx, targetnodes = ConScape._targetidx_and_nodes(grsp.g)
+
+    if diagvalue !== nothing
+        for (j, i) in enumerate(targetnodes)
+            S[i, j] = diagvalue
+        end
+    end
+
+    qˢ = [grsp.g.source_qualities[i] for i in grsp.g.id_to_grid_coordinate_list]
+    qᵗ = [grsp.g.target_qualities[i] for i in targetidx]
+
+    funvec = qˢ .* (S*qᵗ)
+
+    func = sparse([ij[1] for ij in grsp.g.id_to_grid_coordinate_list],
+                  [ij[2] for ij in grsp.g.id_to_grid_coordinate_list],
+                  funvec,
+                  grsp.g.nrows,
+                  grsp.g.ncols)
+    return(func)
+end
+```
+
+
+```{julia}
+function betweenness_kweighted_robust(grsp; connectivity_function, distance_transformation, diagvalue)
+    if distance_transformation === nothing && connectivity_function <: ConScape.DistanceFunction
+        if grsp.g.costfunction === nothing
+            throw(ArgumentError("no distance_transformation function supplied and cost matrix in Grid isn't based on a cost function."))
+        else
+            distance_transformation = inv(grsp.g.costfunction)
+        end
+    end
+
+    S = connectivity_function(grsp)
+    map!(t -> t<0 ? Inf : t,  S, S)
+
+    if connectivity_function <: ConScape.DistanceFunction
+        map!(distance_transformation, S, S)
+    end
+
+    targetidx, targetnodes = ConScape._targetidx_and_nodes(grsp.g)
+
+    if diagvalue !== nothing
+        for (j, i) in enumerate(targetnodes)
+            S[i, j] = diagvalue
+        end
+    end
+
+    W = grsp.W
+    Z = grsp.Z
+    qˢ = [grsp.g.source_qualities[i] for i in grsp.g.id_to_grid_coordinate_list]
+    qᵗ = [grsp.g.target_qualities[i] for i in grsp.g.id_to_grid_coordinate_list ∩ targetidx]
+    landmarks = targetnodes
+
+    axis1, axis2 = axes(Z)
+    if axis1 != axes(qˢ, 1)
+        throw(DimensionMismatch(""))
+    end
+    if axis2 != axes(qᵗ, 1)
+        throw(DimensionMismatch(""))
+    end
+    if axes(S) != (axis1, axis2)
+        throw(DimensionMismatch(""))
+    end
+    if axis2 != axes(landmarks, 1)
+        throw(DimensionMismatch(""))
+    end
+
+    Zⁱ = inv.(Z)
+    Zⁱ[.!isfinite.(Zⁱ)] .= floatmax(eltype(Z)) # To prevent Inf*0 later...
+
+    KZⁱ = qˢ .* S .* qᵗ'
+
+    λ = max(1.0, maximum(KZⁱ))
+    k = vec(sum(KZⁱ, dims=1)) * inv(λ)
+
+    KZⁱ .*= inv.(λ) .* Zⁱ
+    for j in axis2
+        KZⁱ[landmarks[j], j] -= k[j] .* Zⁱ[landmarks[j], j]
+    end
+
+    #KZⁱ[.!isfinite.(KZⁱ)] .= floatmax(eltype(KZⁱ))
+    #map!(t -> t>(1.0e10) ? 1.0e10 : t,  KZⁱ, KZⁱ)
+
+    ZKZⁱt = (I - W)'\KZⁱ
+    #ZKZⁱt[.!isfinite.(ZKZⁱt)] .= floatmax(eltype(ZKZⁱt))
+    ZKZⁱt .*= λ .* Z
+    #ZKZⁱt[.!isfinite.(ZKZⁱt)] .= floatmax(eltype(ZKZⁱt))
+
+    betvec = vec(sum(ZKZⁱt, dims=2)) # diag(Z * KZⁱ')
+    #betvec[.!isfinite.(betvec)] .= floatmax(eltype(betvec))
+    #betvec = betvec * inv(maximum(betvec)) * 1000
+    
+    bet = fill(NaN, grsp.g.nrows, grsp.g.ncols)
+    for (i, v) in enumerate(betvec)
+        bet[grsp.g.id_to_grid_coordinate_list[i]] = v
+    end
+
+    return bet
+
+end
+```
+
+# Setup
+
+Folder with input maps:
+
+```{julia}
+datadir = string(pwd(), "/03_output/")
+```
+
+Parameters:
+
+```{julia}
+theta = 0.1
+dist_scal = 500
+
+wparam = string(theta, "_", dist_scal)
+wparam = replace(wparam, "." => "")
+```
+
+# Run scenarios
+
+
+```{julia}
+whichScenario = ("1", "2", "3", "4", "5", "6")
+whichScenario = ("1")
+
+i=1
+for i in 1:length(whichScenario)
+    mov_prob, meta_p = ConScape.readasc(joinpath(datadir, string("scenarios_mdir_2023_tiltak_rondane_ss1_s", whichScenario[i], "_100m_perm.asc")))
+    hab_qual, meta_q = ConScape.readasc(joinpath(datadir, string("scenarios_mdir_2023_tiltak_rondane_ss1_s", whichScenario[i], "_100m_suit.asc")))
+    # this thing has NaN
+    non_matches = findall(xor.(isnan.(mov_prob), isnan.(hab_qual)))
+    mov_prob[non_matches] .= NaN # try 0
+    hab_qual[non_matches] .= NaN;
+    # maximum(hab_qual)
+    g = ConScape.Grid(size(mov_prob)...,
+                    affinities=ConScape.graph_matrix_from_raster(mov_prob),
+                    qualities=hab_qual,
+                    costs=ConScape.mapnz(x -> -log(x), ConScape.graph_matrix_from_raster(mov_prob)));
+    g_coarse = ConScape.Grid(size(mov_prob)...,
+                    affinities=ConScape.graph_matrix_from_raster(mov_prob),
+                    source_qualities=hab_qual,
+                    target_qualities=ConScape.coarse_graining(g, 20),
+                    costs=ConScape.mapnz(x -> -log(x), ConScape.graph_matrix_from_raster(mov_prob)));
+    g_coarse = ConScape.largest_subgraph(g_coarse);
+    if i==1
+        ConScape.writeasc(joinpath(datadir, string("scenarios_mdir_2023_tiltak_rondane_ss1_s", whichScenario[i], "_100m_landmarks.asc")),Matrix(g_coarse.target_qualities), meta_p);
+    end
+
+    h = ConScape.GridRSP(g_coarse, θ=theta);
+    
+    @time func = functionality(h, distance_transformation=x -> exp(-x/dist_scal));
+
+    ConScape.heatmap(Array(func), yflip = true, color = cgrad(:viridis))
+    ConScape.writeasc(joinpath(datadir, string("scenarios_mdir_2023_tiltak_rondane_ss1_s", whichScenario[i], "_100m_", wparam, "_func.asc")),Array(func), meta_p);
+
+    @time kbetw = betweenness_kweighted_robust(h, connectivity_function=ConScape.expected_cost, 
+                        distance_transformation=x -> exp(-x/dist_scal), diagvalue=nothing);
+
+    ConScape.heatmap(Array(kbetw), yflip = true)
+    ConScape.writeasc(joinpath(datadir, string("scenarios_mdir_2023_tiltak_rondane_ss1_s", whichScenario[i], "_100m_", wparam, "_flow.asc")),kbetw, meta_p);
+end
+
+# ConScape.heatmap(Array(func), yflip = true, color = cgrad(:viridis))
+# qbetw = ConScape.betweenness_qweighted(h)
+# kbetw = ConScape.betweenness_kweighted(h, connectivity_function=ConScape.expected_cost, 
+#                         distance_transformation=x -> exp(-x/dist_scal))
+# ConScape.heatmap(kbetw, yflip = true, title = "Betweenness")
+
+```
+
+
+
+```{julia}
+whichScenario = ("1")
+i = 1
+
+mov_prob, meta_p = ConScape.readasc(joinpath(datadir, string("scenarios_mdir_2023_tiltak_rondane_ss1_s", whichScenario[i], "_100m_perm.asc")))
+hab_qual, meta_q = ConScape.readasc(joinpath(datadir, string("scenarios_mdir_2023_tiltak_rondane_ss1_s", whichScenario[i], "_100m_suit.asc")))
+
+# this thing has NaN
+non_matches = findall(xor.(isnan.(mov_prob), isnan.(hab_qual)))
+mov_prob[non_matches] .= NaN # try 0
+hab_qual[non_matches] .= NaN; # try 0
+# mov_prob[non_matches] .= 0 # try 0
+# hab_qual[non_matches] .= 0; # try 0
+
+maximum(hab_qual)
+
+g = ConScape.Grid(size(mov_prob)...,
+                affinities=ConScape.graph_matrix_from_raster(mov_prob),
+                qualities=hab_qual,
+                costs=ConScape.mapnz(x -> -log(x), ConScape.graph_matrix_from_raster(mov_prob)));
+
+# qˢ = [g.source_qualities[i] for i in g.id_to_grid_coordinate_list]
+# qᵗ = [g.target_qualities[i] for i in g.id_to_grid_coordinate_list ∩ targetidx]
+# maximum(qˢ)
+# maximum(qᵗ)
+
+g_coarse = ConScape.Grid(size(mov_prob)...,
+                affinities=ConScape.graph_matrix_from_raster(mov_prob),
+                source_qualities=hab_qual,
+                target_qualities=ConScape.coarse_graining(g, 20),
+                costs=ConScape.mapnz(x -> -log(x), ConScape.graph_matrix_from_raster(mov_prob)));
+g_coarse = ConScape.largest_subgraph(g_coarse);
+
+h = ConScape.GridRSP(g_coarse, θ=theta);
+
+# function betweenness_kweighted_robust(grsp; connectivity_function, distance_transformation, diagvalue)
+# betweenness_kweighted_robust(h, connectivity_function=ConScape.expected_cost, 
+#                         distance_transformation=x -> exp(-x/dist_scal), diagvalue=nothing);
+
+grsp = h;
+connectivity_function=ConScape.expected_cost;
+distance_transformation=x -> exp(-x/dist_scal);
+diagvalue=nothing;
+
+if distance_transformation === nothing && connectivity_function <: ConScape.DistanceFunction
+        if grsp.g.costfunction === nothing
+            throw(ArgumentError("no distance_transformation function supplied and cost matrix in Grid isn't based on a cost function."))
+        else
+            distance_transformation = inv(grsp.g.costfunction)
+        end
+    end
+
+    S = connectivity_function(grsp) # OK
+    map!(t -> t<0 ? Inf : t,  S, S) # OK
+
+
+    if connectivity_function <: ConScape.DistanceFunction
+        map!(distance_transformation, S, S)
+    end # OK
+
+    targetidx, targetnodes = ConScape._targetidx_and_nodes(grsp.g)
+
+    if diagvalue !== nothing
+        for (j, i) in enumerate(targetnodes)
+            S[i, j] = diagvalue
+        end
+    end
+
+    W = grsp.W
+    Z = grsp.Z
+    qˢ = [grsp.g.source_qualities[i] for i in grsp.g.id_to_grid_coordinate_list]
+    qᵗ = [grsp.g.target_qualities[i] for i in grsp.g.id_to_grid_coordinate_list ∩ targetidx]
+    landmarks = targetnodes
+    # all OK
+
+    maximum(qˢ)
+    maximum(qᵗ)
+
+    axis1, axis2 = axes(Z)
+    if axis1 != axes(qˢ, 1)
+        throw(DimensionMismatch(""))
+    end
+    if axis2 != axes(qᵗ, 1)
+        throw(DimensionMismatch(""))
+    end
+    if axes(S) != (axis1, axis2)
+        throw(DimensionMismatch(""))
+    end
+    if axis2 != axes(landmarks, 1)
+        throw(DimensionMismatch(""))
+    end
+
+    Zⁱ = inv.(Z)
+    Zⁱ[.!isfinite.(Zⁱ)] .= floatmax(eltype(Z)) # To prevent Inf*0 later...
+
+    KZⁱ = qˢ .* S .* qᵗ'
+    # replace NaN here
+    #KZⁱ[.!isnan.(KZⁱ)]
+
+    # maximum(qˢ)
+    # maximum(qᵗ)
+
+    # λ = max(1.0, maximum(KZⁱ[.!isnan.(KZⁱ)])) # NaN
+    # k = vec(sum(Zⁱ, dims=1)) * inv(λ)
+    λ = max(1.0, maximum(KZⁱ)) # NaN
+    k = vec(sum(Zⁱ, dims=1)) * inv(λ)
+
+    KZⁱ .*= inv.(λ) .* Zⁱ
+    for j in axis2
+        KZⁱ[landmarks[j], j] -= k[j] .* Zⁱ[landmarks[j], j]
+    end
+
+    #KZⁱ[.!isfinite.(KZⁱ)] .= floatmax(eltype(KZⁱ))
+    #map!(t -> t>(1.0e10) ? 1.0e10 : t,  KZⁱ, KZⁱ)
+
+    ZKZⁱt = (I - W)'\KZⁱ
+    #ZKZⁱt[.!isfinite.(ZKZⁱt)] .= floatmax(eltype(ZKZⁱt))
+    ZKZⁱt .*= λ .* Z
+    #ZKZⁱt[.!isfinite.(ZKZⁱt)] .= floatmax(eltype(ZKZⁱt))
+
+    betvec = vec(sum(ZKZⁱt, dims=2)) # diag(Z * KZⁱ')
+    #betvec[.!isfinite.(betvec)] .= floatmax(eltype(betvec))
+    #betvec = betvec * inv(maximum(betvec)) * 1000
+    
+    bet = fill(NaN, grsp.g.nrows, grsp.g.ncols)
+    for (i, v) in enumerate(betvec)
+        bet[grsp.g.id_to_grid_coordinate_list[i]] = v
+    end
+
+    return bet
+
+ConScape.heatmap(bet, yflip = true, title = "Betweenness")
+```

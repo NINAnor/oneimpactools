@@ -1,0 +1,133 @@
+---
+title: "Scenarioanalyser for evaluering av effekten av ulike avbøtende tiltak for villrein"
+subtitle: "Scenarioanalyser i Rondanemassivet"
+author: "Niebuhr, Panzacchi, Tveraa, Rolandsen, van Moorter"
+date: "`r format(Sys.time(), '%d %b, %Y')`"
+output: NinaR::ninaSlidy
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+# packages
+library(dplyr)
+library(DT)
+
+library(terra)
+library(sf)
+library(tmap)
+
+# parameters
+crs_no <- 25833
+```
+
+```{r read_scenario_table, include=FALSE}
+scen_tab_fil <- "/data/P-Prosjekter/41203800_oneimpact/06_analyses/01_tiltak_MDir_2022/03_output/scenarios_mdir_2023_tiltak_rondane_ss1.rds"
+scenario_info <- readRDS(file = scen_tab_fil)
+```
+
+```{r list_scenarios}
+# all scenarios
+scenario_info |> 
+  select(s_gid, contains("scen")) |> 
+  DT::datatable()
+```
+
+```{r read_one_map, eval=FALSE, include=FALSE}
+# folder and prefix
+dir <- scenario_info$scenario_folder_path[selected_scen]
+pre <- scenario_info$scenario_map_prefix[selected_scen]
+
+# files
+patt <- c("suit", "perm", "func", "flow")
+ff <- list.files(dir, pattern = pre, full.names = TRUE) |> 
+  grep(pattern = paste(patt, collapse = "|"), value = TRUE) |> 
+  grep(pattern = ".asc$", value = TRUE)
+ff <- sapply(patt, function(x) grep(x, ff, value = T))
+
+# read
+maps <- terra::rast(ff[-4])
+plot(maps)
+```
+
+```{r load_maps, include=FALSE}
+# read region
+
+
+scen = 1:5
+
+# read
+scenario_output <- list()
+for(cont in seq_along(scen)) {
+  
+  # folder and prefix
+  dir <- scenario_info$scenario_folder_path[cont]
+  pre <- scenario_info$scenario_map_prefix[cont]
+  
+  # files
+  patt <- c("suit", "perm", "func", "flow")
+  ff <- list.files(dir, pattern = pre, full.names = TRUE) |> 
+    grep(pattern = paste(patt, collapse = "|"), value = TRUE) |> 
+    grep(pattern = ".asc$", value = TRUE)
+  ff <- sapply(patt, function(x) grep(x, ff, value = T))
+  
+  # read
+  scenario_output[[cont]] <- terra::rast(ff)
+  terra::crs(scenario_output[[cont]]) <- paste0("epsg:", crs_no)
+  scenario_output[[cont]] <- terra::mask(scenario_output[[cont]], mask = terra::vect(region))
+  if(cont == 1) baseline_max <- as.numeric(terra::global(scenario_output[[cont]][[3]], fun = quantile, prob = 0.975, na.rm = T))
+  scenario_output[[cont]][[3]] <- scenario_output[[cont]][[3]]/baseline_max
+  scenario_output[[cont]][[3]] <- terra::ifel(scenario_output[[cont]][[3]] > 1, 1, scenario_output[[cont]][[3]])
+  terra::crs(scenario_output[[cont]]) <- paste0("epsg:", crs_no)
+  names(scenario_output[[cont]]) <- patt
+  names(scenario_output)[cont] <- pre
+}
+
+cont <- 1
+plot_list <- list()
+for(cont in scen) {
+  
+  # plot suitability
+  map1 <- tm_shape(scenario_output[[cont]][["suit"]]) +
+    tm_raster(palette = "Greens", style = "cont", title = "Suitability") +
+    tm_layout(legend.position = c("LEFT", "BOTTOM")) +
+    tm_shape(region) +
+    tm_borders() + 
+    tm_compass()
+  
+  # plot permeability
+  map2 <- tm_shape(scenario_output[[cont]][["perm"]]) +
+    tm_raster(palette = "-Greys", style = "cont", title = "Permeability") +
+    tm_layout(legend.position = c("LEFT", "BOTTOM")) +
+    tm_shape(region) +
+    tm_borders() + 
+    tm_scale_bar(position = c("center", "BOTTOM"))
+  
+  map3 <- tm_shape(scenario_output[[cont]][["func"]]) +
+    tm_raster(palette = "viridis", style = "cont", title = "Functionality") +
+    tm_layout(legend.position = c("LEFT", "BOTTOM"), legend.bg.color = "white") +
+    tm_shape(region) +
+    tm_borders()
+  # map3
+  
+  #tm1 <- tmap_arrange(map1, map2, ncol = 2, nrow = 1)
+  plot_list[[cont]] <- list(map1, map2, map3)
+  names(plot_list)[cont] <- names(scenario_output)[cont]
+}
+```
+
+## Baseline scenario
+
+Describe the baseline scenario.
+
+```{r scen1_results, include=FALSE}
+tmap_arrange(plot_list[[1]][[1]], plot_list[[1]][[2]], plot_list[[1]][[3]],
+             ncol = 2, nrow = 2)
+```
+
+
+## Side med kulepunkter
+
+- Bullet 1
+    + Sub-bullet
+- Bullet 2
+- Bullet 3

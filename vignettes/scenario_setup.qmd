@@ -1,0 +1,1152 @@
+---
+title: "Setting up scenarios for scenario analyses"
+format: html
+editor: visual
+---
+
+# Introduction
+
+Write here what is the context and the building blocks for this document.
+
+# Packages and parameters
+
+First of all, we load all the relevant packages. The main functions of the 
+workflow are implemented in the `oneimpactools` package, with support from
+the `oneimpact` package. Besides, we load the package `survival` to support the
+conditional logistic modeling, spatial packages to deal with spatial data and 
+predictions, and other packages for data organization and manipulation.
+
+```{r load_packages}
+# data wrangling
+require(dplyr)
+require(tidyr)
+require(purrr)
+require(NinaR)
+require(DBI)
+require(DT)
+
+# spatial handling
+require(sf)
+require(sfheaders)
+require(terra)
+require(tmap)
+require(raster)
+
+# model prediction
+require(survival)
+
+# scenario setup
+require(oneimpact)
+require(oneimpactools)
+```
+
+We also load ancillary code, essencial for the scenario pipeline.
+
+```{r code}
+source("data_load_prepare.R")
+source("model_refit.R")
+source("model_predict.R")
+```
+
+We also set some parameters to be used for creating and managing the data: 
+
+- CRS: we EPSG:25833 (ETRS89/UTM zone 33N) as the CRS for the project.
+
+```{r parms}
+# CRS to be used
+crs_no <- 25833 #EPSG:25833 (ETRS89/UTM zone 33N)
+```
+
+# Structure of the databases
+
+GRASS, PostGIS, data, model, what is located where
+Created a schema for simulations
+
+# Connect to PostGIS
+
+We start by connecting the R session to the PostGIS database, where the tables 
+and layers will be stored. They can also be saved and stored on other formats 
+(e.g. ESRI Shapefile, Geopackage) using the `sf` and `terra` pacakges and edited 
+using any GIS (e.g. QGIS, ArcMap).
+
+```{r connect_pgis}
+# This connects to the gisdatabase with a DBI connection named `con`.
+# Use for example dbGetQuery(con, "SELECT * FROM ….") to query the database
+source("~/.pgpass")
+
+NinaR::postgreSQLConnect(
+  host = "gisdata-db.nina.no",
+  dbname = "gisdata",
+  username = pg_username,
+  password = pg_password
+)
+
+# make string to link to PostGIS data in data importing to GRASS
+str_con <- paste0("PG:host=gisdata-db.nina.no user=", pg_username, " password=", pg_password, " dbname=gisdata")
+
+rm(pg_username, pg_password)
+```
+
+# Connect to GRASS GIS
+
+We now connect to the GRASS GIS database, creating a new mapset to work with
+these scenarios. The mapset is named as "p_sam_scenario" + the name of the project,
+to be easily identifiable.
+
+```{r connect_grass}
+grass_mapset <- paste0("p_sam_scenarios_", "mdir_2023_tiltak_rondane")
+#NinaR::grassConnect(mapset = grass_mapset)
+```
+
+# Setup the table of scenarios
+
+## Initialize table
+
+We create here a table with 6 scenarios for Rondane, all within the same scenario 
+set. The scenario set corresponds to multiple scenarios in the axis Høvringen-Peer Gynt-Spranget-Rondvassbu-Bjørnhollia-Straumbu, all around Rondanemassivet. One of 
+the scenarios corresponds to the baseline and the others correspond 
+to the scenarios 1, 2.1, 2.2, 2.3 (a combination of 2.1 and 2.2), and 3 (a 
+combination of all other ones). Scenario 1 is focused on changes to the East
+of Rondanemassivet, while scenarios 2.X correspond to changes to the West of 
+Rondanemassivet.
+
+```{r setup_table_scenarios}
+# create scenario table
+scenario_info <- scenario_table_create(s_gid = 1:6)
+
+# add info
+names <- c("wrein_rondane_baseline", "wrein_rondane_1vest_bjornhollia",
+           "wrein_rondane_21ost_pergynt_hytta", "wrein_rondane_22ost_mysuseter",
+           "wrein_rondane_23ost_all", "wrein_rondane_massivet_all")
+nicknames <- c("0_baseline", "1_vest_bjornhollia", "2_ost_1_pergynt",
+               "2_ost_2_mysuseter", "2_ost_3_all", "3_all")
+scenario_info <- scenario_table_update(scenario_info, 
+                                       s_gid = 1:6, 
+                                       scenset_id = 1,
+                                       scenset_name = "wrein_rondane_massivet_mdir_2023",
+                                       scen_id = c(0, 1, 2.1, 2.2, 2.3, 3),
+                                       scen_name = names, 
+                                       scen_nickname = nicknames, 
+                                       project_name = "mdir_2023_tiltak_rondane", 
+                                       study_area = "Rondane Nord", 
+                                       sub_area = "Rondane massivet", 
+                                       species = "Wild reindeer",
+                                       season = "Summer",
+                                       grass_mapset = grass_mapset)
+
+# check
+DT::datatable(scenario_info)
+```
+
+Here we started to fill in the information of each scenario to be recorded in the table of scenarios.
+
+## Details
+
+We can now add a detailed description of each of the scenarios.
+
+```{r scenario_details}
+# add info to one single scenario using scen_id as a key
+baseline_desc <- "This is the baseline scenario for the Rondane Massivet scenario set. It is based on the predictions of the habitat suitability models fitted to wild reindeer GPS data of 10 wild reindeer areas in Renewable Reindeer and ProdChange projects led by NINA, including Rondane North and South. The baseline scenario includes all infrastructure present in 2020, with some local corrections of features that were/were not included in the model fitting phase."
+scenario_info <- scenario_table_update(scenario_info, ref_column = "scen_id", 
+                                       scen_id = 0, description = baseline_desc)
+# check
+scenario_info$description
+```
+
+**Add other descriptions here later**
+
+We can also set which scenarios are baseline scenarios for a given scenario set and
+which are a combination of other scenarios. Here we define scenario `s_gid = 1` as
+the baseline scenario and scenario `s_gid = 5` as a combination of scenarios 2,
+3, and 4.
+
+```{r baseline_combinations}
+scenario_info <- scenario_table_update(scenario_info, s_gid = 1:6, 
+                                       baseline = c(TRUE, FALSE, FALSE, FALSE, FALSE, FALSE),
+                                       combination = c(1, 2, 3, 4, "1,3,4", "1,2,3,4"))
+```
+
+## Set region for the scenarios
+
+The region for the current scenario set is the region of Rondane Nord. We use the
+polygon for this area as the mask for the computations and predictions. We set
+the location of this polygon in the PostGIS database (and could do the same for 
+the GRASS database) so it is straightforward to retrieve it.
+
+```{r set_region}
+scenario_info <- scenario_table_update(scenario_info, s_gid = 1:6, 
+                                       region_postgis_layer = "sam_wrein_ancillary.reindeer_areas_2023",
+                                       region_postgis_condition = "name_area = 'Rondane Nord'")
+```
+
+We can load this layer into R, since it will be useful.
+
+```{r get_region}
+# get region polygon
+region <- sf::st_read(con, 
+                      query = db_make_query("SELECT * FROM ",
+                                            scenario_info$region_postgis_layer[1],
+                                            " WHERE ",
+                                            scenario_info$region_postgis_condition[1]))
+```
+
+We also get the official limits of Rondane wild reindeer area and cut it to the
+northern part of the management area. This is not recorded in the table but is 
+used later to compute the changes in terms of suitability, permeability, and
+functionality.
+
+```{r get_region_official}
+# read official polygon
+region_official <- sf::st_read(con, 
+                      query = db_make_query("SELECT * FROM ",
+                                            "sam_wrein_ancillary.reindeer_areas_official_2023",
+                                            " WHERE ",
+                                            "name_area = 'Rondane'"))
+
+# part of the official limits of Rondane within Rondane Nord
+region_official <- region_official |> 
+  sf::st_intersection(region)
+
+# plot(region_official[1])
+```
+
+## Register model and data objects
+
+We start by registering the files and object names where the suitability model (RSF), 
+the permeability model (SSF), and the data are stored.
+
+```{r scenario_set_models}
+scenario_info <- scenario_table_update(scenario_info, s_gid = 1:6, 
+                                       model_suit_object_path = "/data/R/Prosjekter/Rein/Func_output/AA_Scenario_Official/summer/wrein_rsf_best_sum_20200918.rdata",
+                                       model_suit_object = "wrein_rsf_summer",
+                                       model_perm_object_path = "/data/R/Prosjekter/Rein/Func_output/AA_Scenario_Official/summer/wrein_ssf_best_3kmExp_sum_20201004.rdata",
+                                       model_perm_object = "wrein_ssf_summer",
+                                       data_suit_object_path = "/data/R/Prosjekter/Rein/RSF_output/wrein_dat_sub_20200518V2.rda",
+                                       data_suit_object = "dat",
+                                       data_perm_object_path = "/data/R/Prosjekter/Rein/SSF_output/wrein_ssfdat_sub_20200709.rda",
+                                       data_perm_object = "dat")
+
+scenario_info |> 
+  dplyr::select(s_gid, contains("object"))
+```
+
+Now we can use that to load or refit the model and prepare it for the spatial 
+predictions. Here we can use the function `data_load_prepare()` to load and prepare
+the data sets, and the funciton `model_refit()` to fit them once again. These
+function load different data and prepare them differently depending on the 
+parameters `data` and `model`, which can be set to either `"suit"` for the 
+suitability (RSF) models and `"perm"` for the permeability (SSF) models.
+Since all predictions in the scenario set are for the same season, we use the 
+first one to generate the models.
+
+```{r scenario_load_models}
+# code - not in a package so far
+# source("data_load_prepare.R")
+# source("model_refit.R")
+
+# suitability data
+# s_gid is which scenario we refer to - here all are based on the same model
+dat_rsf <- data_load_prepare(scenario_info, s_gid = 1, data = "suit", 
+                             model = "suit", verbose = TRUE)
+# suitability model 
+mod_rsf <- model_refit(scenario_info, s_gid = 1, data = dat_rsf, 
+                       model = "suit", verbose = TRUE)
+
+# In just one take it would be
+# mod_rsf <- scenario_info |> 
+#   data_load_prepare(s_gid = 1, data = "suit", verbose = TRUE) |> 
+#   model_refit(scenario_table = scenario_info, s_gid = 1, model = "suit", verbose = TRUE)
+
+# permeability data
+dat_ssf <- scenario_info |> 
+  data_load_prepare(s_gid = 1, data = "perm", model = "perm", verbose = TRUE)
+
+# permeability model
+mod_ssf <- scenario_info |> 
+  model_refit(s_gid = 1, data = dat_ssf, model = "perm", verbose = TRUE)
+```
+
+## Register environmental data
+
+We can also register the background data. If the data has already been download/saved,
+it can be just referenced directly.
+
+```{r scenario_set_data_ready, eval=FALSE}
+scenario_info <- scenario_table_update(scenario_info, s_gid = 1:5, 
+                                       data_env_object_path = "/data/R/Prosjekter/Rein/tmp/grd_all.rda",
+                                       data_env_object = "grd")
+```
+
+If not, it can be retrieved from the database using the `db_get_data()` function,
+and then saved externally.
+
+```{r scenario_get_data, eval=FALSE}
+# make box around it
+bbox <- sf::st_bbox(region)
+
+# define table where the environmental spatial data are
+table <- "sam_tools.norway_grid_env"
+condition <- "wild_reindeer_area IS NOT NULL"
+
+# get the data within the bbox
+dat_env <- db_get_data(con, table, condition, bbox)
+# save it externally
+save(dat_env, file = "../02_data/env_data_rond_nord.rda")
+
+# check it worked to apply the bounding box
+rast_env <- terra::rast(dat_env[,c("x33", "y33", "norway_pca_klima_axis1")], type = "xyz", 
+                        crs = paste0("epsg:", crs_no)) 
+# plot        
+plot(terra::vect(region))
+plot(rast_env)
+
+# plot with tmap
+tm_shape(rast_env) +
+  tm_raster() +
+  tm_shape(region) +
+  tm_borders()
+```
+
+Now we can now register this object in the table of scenarios.
+
+```{r scenario_set_data}
+scenario_info <- scenario_table_update(scenario_info, s_gid = 1:6, 
+                                       data_env_object_path = "/data/P-Prosjekter/41203800_oneimpact/06_analyses/01_tiltak_MDir_2022/02_data/env_data_rond_nord.rda",
+                                       data_env_object = "dat_env")
+```
+
+Now we can (re)load the environmental data to be used to make the predictions. We
+use the function `data_load_prepare()` with `data = "env"` referring to the
+environmental covariates.
+
+```{r}
+# suitability - env data 
+# s_gid is which scenario we refer to - here all are based on the same model
+dat_env_rsf <- data_load_prepare(scenario_info, s_gid = 1, 
+                                 data = "env", model = "suit", verbose = TRUE)
+
+# permeability - env data
+dat_env_ssf <- data_load_prepare(scenario_info, s_gid = 1, 
+                                 data = "env", model = "perm", verbose = TRUE)
+```
+
+## Predict model, for testing purpose
+
+Now we make a prediction, just to test it, using the `model_predict` function.
+We'll use this function later for making the predictions for the different 
+scenarios. It produces a list with two objects - a grid, with the prediction in
+`data.frame` format, and a rast, with the prediction in `SpatRaster` format.
+
+```{r model_prediction, eval=FALSE}
+# suitability
+pred_rsf <- model_predict(scenario_info, 1, mod_rsf, dat_env_rsf, dat_rsf, 
+                          model = "suit", crs = paste0("epsg:", crs_no), 
+                          verbose = TRUE)
+pred_rsf_rast <- pred_rsf$rast
+plot(pred_rsf_rast)
+
+# permeability
+pred_ssf <- model_predict(scenario_info, 1, mod_ssf, dat_env_ssf, dat_ssf, 
+                          model = "perm", crs = paste0("epsg:", crs_no), 
+                          verbose = TRUE)
+pred_ssf_rast <- pred_ssf$rast
+plot(pred_ssf_rast)
+
+# plot
+map1 <- tm_shape(pred_rsf_rast) +
+  tm_raster(palette = "Greens", style = "cont", title = "Suitability") +
+  tm_layout(legend.position = c("LEFT", "BOTTOM")) +
+  tm_shape(region) +
+  tm_borders() + 
+  tm_compass()
+
+map2 <- tm_shape(pred_ssf_rast) +
+  tm_raster(palette = "-Greys", style = "cont", title = "Permeability") +
+  tm_layout(legend.position = c("LEFT", "BOTTOM")) +
+  tm_shape(region) +
+  tm_borders() + 
+  tm_scale_bar(position = c("center", "BOTTOM"))
+
+tmap_arrange(map1, map2, ncol = 2, nrow = 1)
+```
+
+For the time being, we use one of these maps to use as a reference raster for
+defining the working region and the resolution and alignment of raster layers. We
+do so by saving this vector externally and updating the column `region_file_raster`
+in the `scenario_info` table.
+
+```{r model_prediction_save, eval=TRUE}
+# save
+dir <- "/data/P-Prosjekter/41203800_oneimpact/06_analyses/01_tiltak_MDir_2022/02_data/"
+ref_rast <- paste0(dir, "ref_raster_rsf_prediction.tif")
+#terra::writeRaster(pred_rsf_rast, filename = ref_rast)
+
+# register in table
+scenario_info <- scenario_table_update(scenario_info, s_gid = 1:6,
+                                       region_file_raster = ref_rast)
+```
+
+# Setup the vectors to be edited
+
+Now we stop the setup of the table of scenarios and instead edit the layers that
+will compose the changes for each scenario.
+
+## Create vector objects
+
+First we create vector objects with similar structure (column names) for each type 
+of feature to be added, removed, or moved (point, line, polygon). These vectors 
+are created with an empty geometry, to be deleted later.
+
+```{r create_vect}
+# points to add or remove
+tb_pts <- vect_table_create(scenset_id = 1, scen_id = 1, 
+                            type = "cabin_test", 
+                            layer = "cabin_test",
+                            zoi = TRUE, 
+                            change = "remove",
+                            geom_type = "POINT",
+                            crs = crs_no)
+
+# lines to add or remove
+tb_lines <- vect_table_create(scenset_id = 1, scen_id = 1, 
+                              type = "trail_test", 
+                              layer = "trail_test",
+                              zoi = TRUE, 
+                              change = "remove",
+                              geom_type = "LINESTRING",
+                              crs = crs_no)
+```
+
+```{r create_vect_pol, eval=FALSE}
+#| eval: false
+
+# polygons to add or remove 
+# WE DO NOT DO IT NOW, BUT IT IS POSSIBLE
+tb_polygons <- vect_table_create(scenario_set_id = 1, scenario_id = 1, 
+                                 type = "trail", 
+                                 layer = "trails_summer",
+                                 zoi = TRUE, 
+                                 change = "remove",
+                                 geom_type = "POLYGON",
+                                 crs = crs_no)
+```
+
+## Save the vector objects externally for manual edition
+
+Now the vector objects can be saved externally to be edited in GIS software. 
+Here we save then in a PostGIS database, but it is equally possible to save it in 
+ESRI Shapefile, Geopackage, or other database formats with `sf::st_write()`.
+
+We instead use the function `oneimpactools::db_write_vect()` to be able to 
+guarantee a primary key in these tables and add comments to them. We write these
+tables to the `sam_scenarios_wrein` schema in the `gisdata` PostGIS database.
+
+```{r save_vect, eval=FALSE}
+# get project name
+(pr <- scenario_info$project_name[1])
+
+#---
+# save points table in PostGIS
+# sf::st_write(tb_pts, con, Id(schema = "sam_scenarios_wrein", table = paste(pr, "_pts")))
+comm <- "Point features to be added, removed, or changed in the scenario analysis for wild reindeer in Rondane, within the project for Miljodirektoratet in 2023."
+oneimpactools::db_write_vect(vect = tb_pts, con, dsn = paste0("sam_scenarios_wrein.scenarios_", pr, "_pts"),
+                             comment = comm)
+
+#---
+# save lines table in PostGIS
+comm <- "Line features to be added, removed, or changed in the scenario analysis for wild reindeer in Rondane, within the project for Miljodirektoratet in 2023."
+oneimpactools::db_write_vect(vect = tb_lines, con, dsn = paste0("sam_scenarios_wrein.scenarios_", pr, "_lin"),
+                             comment = comm)
+```
+
+We also register these tables in our table of scenarios.
+
+```{r register_vect}
+# get project name
+(pr <- scenario_info$project_name[1])
+
+scenario_info <- oneimpactools::scenario_table_update(scenario_info, s_gid = 1:6, 
+                                                      modified_vector_pts = paste0("sam_scenarios_wrein.scenarios_", pr, "_pts"),
+                                                      modified_vector_lin = paste0("sam_scenarios_wrein.scenarios_", pr, "_lin"))
+```
+
+## Edit vectors
+
+The vector edition is here done in a GIS software of preference. When editing the
+vectors to be changed, we need to keep track and correctly register the columns for
+the scenario general id (`"s_gid"`) and scenario id number (`"scen_id"`), since these
+are the columns that will be used to link the vectors to be changed to the 
+table of scenarios, where the models and data are recorded. 
+
+```{r}
+# DT::datatable(scenario_info)
+scenario_info
+mod_rsf$formula
+```
+
+**Add here instructions and explanation of the columns in the vector tables**
+
+# Explore vectors and regiter zones of influence
+
+After editing the vectors, we can explore them and update the columns related to
+the ZOI of each variable, so that these columns correspond to the model to be
+predicted.
+
+## Read table of vectors to be changed
+
+```{r read_vect1}
+# read points
+vect_points <- db_read_vect(con, scenario_info$modified_vector_pts[1], return_format = "terra")
+# read lines
+vect_lines <- db_read_vect(con, scenario_info$modified_vector_lin[1], return_format = "terra")
+
+# plot all
+plot(vect_lines)
+plot(vect_points, add = T)
+```
+
+We can also read all of them in a single object using the `scenario_vect_read()`
+function. We can then plot them using the `scenario_plot_vect()` function.
+
+```{r read_vect2}
+# by default we read all features from all scenarios
+vects <- scenario_vect_read(scenario_info, con)
+vects
+
+# plot
+scenario_plot_vect(vects, col_lin = "grey")
+# can use column of the attribute table to color
+# scenario_plot_vect(vects, col_lin = "type")
+# scenario_plot_vect(vects, col_lin = "changebase", col_pts = "changebase", pal_pts = "div")
+```
+
+This can also be done only for one scenario at a time. For instance, for the 
+baseline scenario, these are the features to be changed.
+
+```{r read_vect3}
+# read only scenario with s_gid == 1
+vects <- scenario_vect_read(scenario_info, con, s_gid = 1)
+vects
+
+scenario_plot_vect(vects, col_lin = "changebase",
+                   legend.outside = TRUE, title = "Change", 
+                   legend.title.size = 0.01)
+```
+
+## Retrieve and register the zones of influence (ZOI)
+
+Now we can retrieve what environmental layers will be changed in different
+scenarios, and what are the relevant ZOI radius to be used for computing and 
+correcting the ZOIs locally.
+
+```{r register_zoi}
+#---
+# get all vectors
+vects <- scenario_vect_read(scenario_info, con, subset_scenarios = FALSE)
+vects
+
+#---
+# list types of features modified in vectors
+all_attributes <- scenario_vect_get_values(vects)
+(layer_types <- scenario_vect_get_values(vects, c("type", "layer")) |> unique())
+(layers <- scenario_vect_get_values(vects)$layer |> unique())
+
+#---
+# retrieve ZOI from model 
+
+# rsf
+(zois_rsf <- model_get_zoi(mod_rsf, layers))
+# ssf
+(zois_ssf <- model_get_zoi(mod_ssf, layers) |> 
+    dplyr::filter(!grepl("cross", covariate_name)))
+
+all_vars <- rbind(zois_rsf, zois_ssf) |> 
+  pull(variable) |> 
+  unique()
+
+#---
+# update ZOI in vector attribute table
+# so far only in R, not in PostGIS
+for(i in seq_along(all_vars)) {
+  # get geom_type
+  gt <- all_attributes$geom_type[all_attributes$layer == all_vars[i]][1]
+  # update
+  rows <- which(vects[[gt]]$layer == all_vars[i])
+  vects[[gt]][rows, "zoirad_suit"] <- zois_rsf$zoi_radius[which(zois_rsf$variable == all_vars[i])]
+  vects[[gt]][rows, "zoirad_perm"] <- zois_ssf$zoi_radius[which(zois_ssf$variable == all_vars[i])]
+  ### add ifelse if the variable is not present in the model, then put NA
+}
+
+# check
+scenario_vect_get_values(vects)
+```
+
+We can also register the changed variables in our table of scenarios, so it is
+easier to have an overview of what changed in each scenario.
+
+```{r register_zoi_vars_scenario_tab}
+# for each scenario
+for(i in 1:nrow(scenario_info)) {
+  
+  # get s_gid
+  sgid <- scenario_info$s_gid[i]
+  
+  # get layer names to be changed
+  layers <- scenario_vect_get_values(vects) |> 
+    dplyr::filter(s_gid == sgid | (!is.na(changebase) & changebase != ""))
+  
+  # variables
+  vars <- unique(layers$layer)
+  # variables included in the models
+  vars_included_suit <- grep(paste(vars, collapse = "|"), zois_rsf$variable)
+  vars_included_perm <- grep(paste(vars, collapse = "|"), zois_ssf$variable)
+  vars_included <- unique(c(vars[vars_included_suit], vars[vars_included_perm]))
+  vars_included <- sort(vars_included[!is.na(vars_included)])
+  
+  # update table of scenarios
+  scenario_info <- scenario_table_update(scenario_info, s_gid = i,
+                                         modified_env_layers = paste(vars_included, collapse = ","),
+                                         modified_var_names_suit = paste(zois_rsf$covariate_name[vars_included_suit], collapse = ","),
+                                         zoi_radii_suit = paste(zois_rsf$zoi_radius[vars_included_suit], collapse = ","),
+                                         modified_var_names_perm = paste(zois_ssf$covariate_name[vars_included_perm], collapse = ","),
+                                         zoi_radii_perm = paste(zois_ssf$zoi_radius[vars_included_perm], collapse = ","))
+}
+
+# check
+scenario_info |> 
+  dplyr::select(s_gid, modified_env_layers, contains("var_names"), contains("zoi_radii"))
+```
+
+# Simulate one scenario
+
+We start simulating the baseline scenario. Here it comprises of the same data used 
+for model fitting plus a few local changes because some infrastructure was missing
+or wrong in the spatial database we used for analysis.
+
+## Set scenario 
+
+We first set to which scenario we are referring to. 
+We start with scenario with ID 0 
+(s_gid = 1), which is our baseline scenario.
+
+```{r}
+# all scenarios
+scenario_info |> 
+  select(s_gid, contains("scen"))
+
+# scenario
+selected_scen <- 1
+```
+
+## Get features
+
+If the vector files in the database are updated, they can be read directly from
+the PostGIS database, as shown below:
+
+```{r, eval=FALSE}
+# select relevant features
+scenario_features <- scenario_vect_read(scenario_info, con,
+                                        s_gid = selected_scen,  
+                                        correct_baseline = TRUE)
+# correct_baseline is by default TRUE
+```
+
+However, as here the ZOI radii was updated directly in R, we used the vector
+object `vects` already loaded in R. We subset the scenario using the 
+`scenario_vect_subset()` function, and use the function `scenario_vect_get_values()`
+to get all the values of types of geometry and layer names in a single table. This
+allows us to sort what needs to be processed next.
+
+```{r}
+scenario_features <- scenario_vect_subset(vects, s_gid = selected_scen)
+scenario_feature_vals <- scenario_vect_get_values(scenario_features)
+```
+
+There are then 3 types of layers to be included in this baseline scenario. However,
+since one of them (trails) have both layers to be added and removed, we need to 
+process 4 different subsets of layers.
+
+```{r}
+(to_process <- scenario_feature_vals |> 
+   group_by(changebase, geom_type, layer) |> 
+   summarise(n = n()))
+# change column to change when it is not baseline
+```
+
+## Rasterize and process environmental data
+
+Now the vectors need to be rasterized and we must compute the zone of influence
+for these features locally. This process can be done both in GRASS and R. Since 
+the area is relatively small, we try it in R.
+
+In GRASS, we need to define the region of interest (using the `region_grass_layer` 
+and `region_grass_condition` columns in the `scenario_info` table) and use one 
+raster to set the resolution and align the output rasters.
+
+Since here we'll do the computations in R, we use the predicted test rasters
+created above.
+
+```{r rast_and_process_r}
+#---
+# get reference raster
+ref_rast <- terra::rast(scenario_info$region_file_raster[selected_scen])
+
+#---
+# rasterize and compute ZOI
+
+# suitability
+scenarios_rast_rsf <- calc_zoi_local(vects = scenario_features, 
+                                     ref_raster = ref_rast, 
+                                     mod = mod_rsf, 
+                                     model = "suit", 
+                                     output_type = "density",
+                                     baseline = scenario_info$baseline[selected_scen])
+
+# permeability
+scenarios_rast_ssf <- calc_zoi_local(vects = scenario_features, 
+                                     ref_raster = ref_rast, 
+                                     mod = mod_ssf, 
+                                     model = "perm", 
+                                     output_type = "density",
+                                     baseline = scenario_info$baseline[selected_scen])
+```
+
+We do the same in GRASS, for comparison.
+
+```{r rast_and_process_r}
+#---
+# get reference raster
+ref_rast <- terra::rast(scenario_info$region_file_raster[selected_scen])
+
+#---
+# rasterize and compute ZOI
+
+# connect to GRASS
+NinaR::grassConnect()
+
+# suitability
+scenarios_rast_rsf <- calc_zoi_local(vects = scenario_features, 
+                                     ref_raster = ref_rast, 
+                                     mod = mod_rsf, 
+                                     model = "suit", 
+                                     baseline = TRUE,
+                                     output_type = "density",
+                                     where = "GRASS")
+
+# permeability
+scenarios_rast_ssf <- calc_zoi_local(vects = scenario_features, 
+                                     ref_raster = ref_rast, 
+                                     mod = mod_ssf, 
+                                     model = "perm", 
+                                     baseline = TRUE,
+                                     output_type = "density",
+                                     where = "GRASS")
+```
+
+We can now check the variables that will be added and removed to the scenario.
+
+```{r}
+# added
+plot(scenarios_rast_rsf$add)
+
+# removed
+plot(scenarios_rast_rsf$remove)
+```
+
+## Correct annotated data and predict
+
+Now we re-load the environmental data, providing the list of rasters of changes,
+so that the environmental grid is changed locally.
+
+```{r}
+# suitability - env data changed for scenarios
+# s_gid is which scenario we refer to - here all are based on the same model
+scen_dat_env_rsf <- data_load_prepare(scenario_info, s_gid = selected_scen, 
+                                      data = "env", model = "suit", 
+                                      scenario_rast = out_rast, 
+                                      verbose = TRUE)
+
+# permeability - env data changed for scenarios
+scen_dat_env_ssf <- data_load_prepare(scenario_info, s_gid = selected_scen,
+                                      data = "env", model = "perm", 
+                                      scenario_rast = out_rast, 
+                                      verbose = TRUE)
+```
+
+## Predict model in space
+
+And now we predict in space.
+
+```{r}
+# suitability
+scen_pred_rsf <- model_predict(scenario_info, s_gid = selected_scen, 
+                               mod_rsf, scen_dat_env_rsf, dat_rsf, 
+                               model = "suit", crs = paste0("epsg:", crs_no), 
+                               verbose = TRUE)
+scen_pred_rsf_rast <- scen_pred_rsf$rast
+plot(scen_pred_rsf_rast)
+
+plot(ref_rast-scen_pred_rsf_rast)
+
+# permeability
+scen_pred_ssf <- model_predict(scenario_info, s_gid = selected_scen, 
+                               mod_ssf, scen_dat_env_ssf, dat_ssf, 
+                               model = "perm", crs = paste0("epsg:", crs_no), 
+                               verbose = TRUE)
+scen_pred_ssf_rast <- scen_pred_ssf$rast
+plot(c(scen_pred_rsf_rast))
+
+# plot
+map1 <- tm_shape(scen_pred_rsf_rast) +
+  tm_raster(palette = "Greens", style = "cont", title = "Suitability") +
+  tm_layout(legend.position = c("LEFT", "BOTTOM")) +
+  tm_shape(region) +
+  tm_borders() + 
+  tm_compass()
+
+map2 <- tm_shape(scen_pred_ssf_rast) +
+  tm_raster(palette = "-Greys", style = "cont", title = "Permeability") +
+  tm_layout(legend.position = c("LEFT", "BOTTOM")) +
+  tm_shape(region) +
+  tm_borders() + 
+  tm_scale_bar(position = c("center", "BOTTOM"))
+
+tmap_arrange(map1, map2, ncol = 2, nrow = 1)
+```
+
+## Export rasters
+
+First we register the folder and the file prefix for the output maps in the
+table of scenarios.
+
+```{r}
+# register in table
+scenario_map_folder <- paste0("../03_output/")
+scenario_map_prefix <- paste0("scenarios_",
+                              scenario_info$project_name[selected_scen], "_ss",
+                              scenario_info$scenset_id[selected_scen], "_s",
+                              selected_scen) 
+
+scenario_info <- scenario_table_update(scenario_info, s_gid = selected_scen,
+                                       scenario_folder_path = scenario_map_folder,
+                                       scenario_map_prefix = scenario_map_prefix)
+```
+
+Now we finally export the rasters of suitability and permeability, to use them
+to compute the connectivity maps.
+
+```{r}
+# export suitability
+(f <- paste0(scenario_map_prefix, "_100m_suit.asc"))
+# terra::writeRaster(scen_pred_rsf_rast, 
+#                    filename = paste0(scenario_map_folder, f), 
+#                    filetype = "ascii", overwrite = T)
+raster::writeRaster(raster::raster(scen_pred_rsf_rast),
+                    filename = paste0(scenario_map_folder, f),
+                    format = "ascii", overwrite = T)
+
+# export permeability
+(f <- paste0(scenario_map_prefix, "_100m_perm.asc"))
+# terra::writeRaster(scen_pred_ssf_rast, 
+#                    filename = paste0(scenario_map_folder, f), 
+#                    filetype = "AAIGrid", overwrite = T)
+raster::writeRaster(raster::raster(scen_pred_ssf_rast),
+                    filename = paste0(scenario_map_folder, f),
+                    format = "ascii", overwrite = T)
+```
+
+## Update/save scenario info table
+
+Finally, we save the `scenario_info` table externally.
+
+```{r}
+# for now, in a folder, later in PostGIS when it is complete
+out_table <- paste0("scenarios_", scenario_info$project_name[1], 
+                    "_ss", scenario_info$scenset_id[1])
+write.csv(scenario_info, file = paste0(scenario_map_folder, out_table, ".csv"))
+saveRDS(scenario_info, file = paste0(scenario_map_folder, out_table, ".rds"))
+```
+
+# Simulate multiple scenarios
+
+This needs to be changed if there are more than a single scenario set.
+
+Before starting, we also read the layer of lakes and rasterize it. It will be 
+useful for masking out water from the permeability maps.
+
+```{r}
+# read lakes and reservoirs
+reservoirs <- sf::st_read(con, 
+                          query = db_make_query("SELECT * FROM sam_env.reservoirs_all_no")) |> 
+  sf::st_intersection(region)
+lakes <- sf::st_read(con, 
+                     query = db_make_query("SELECT * FROM sam_env.lakes_no")) |> 
+  sf::st_intersection(region)
+
+# ref rast
+ref_rast <- terra::rast(scenario_info$region_file_raster[scenario_info$s_gid == selected_scen])
+
+# rasts
+reservoir_rast <- terra::rasterize(terra::vect(reservoirs), ref_rast)
+lakes_rast <- terra::rasterize(terra::vect(lakes), ref_rast)
+water_rast <- terra::mosaic(reservoir_rast, lakes_rast)
+```
+
+Now we go for the multiple scenarios.
+
+```{r scenarios_multiple}
+# all scenarios
+all_scenarios <- scenario_info$s_gid
+
+# get all vectors 
+vects <- scenario_vect_read(scenario_info, con)
+vects
+
+#---
+# list types of features modified in vectors
+all_attributes <- scenario_vect_get_values(vects)
+layers <- scenario_vect_get_values(vects)$layer |> unique()
+
+#---
+# retrieve ZOI from model 
+
+# rsf
+(zois_rsf <- model_get_zoi(mod_rsf, layers))
+# ssf
+(zois_ssf <- model_get_zoi(mod_ssf, layers) |> 
+    dplyr::filter(!grepl("cross", covariate_name)))
+
+#---
+# update ZOI in vector attribute table
+# so far only in R, not in PostGIS
+for(i in seq_along(layers)) {
+  # get geom_type
+  gt <- all_attributes$geom_type[all_attributes$layer == layers[i]][1]
+  # update
+  rows <- which(vects[[gt]]$layer == layers[i])
+  vects[[gt]][rows, "zoirad_suit"] <- zois_rsf$zoi_radius[which(zois_rsf$variable == layers[i])]
+  vects[[gt]][rows, "zoirad_perm"] <- zois_ssf$zoi_radius[which(zois_ssf$variable == layers[i])]
+  ### add ifelse if the variable is not present in the model, then put NA
+}
+
+# object with rasters
+scenario_output <- list()
+
+# option for mask out water
+mask_water <- TRUE
+
+# for each scenari
+#selected_scen <- 2
+cont <- 3
+for(cont in seq_along(all_scenarios)[3]) {
+  
+  # subset
+  selected_scen <- all_scenarios[cont]
+  print(selected_scen)
+  
+  # is baseline
+  is_baseline <- scenario_info$baseline[scenario_info$s_gid == selected_scen]
+  
+  #---
+  # get reference raster
+  ref_rast <- terra::rast(scenario_info$region_file_raster[scenario_info$s_gid == selected_scen])
+  
+  #---
+  ## Get features
+  # get gids, if it is a combination of scenarios or not
+  scen_gids <- scenario_info$combination[scenario_info$s_gid == selected_scen] |> 
+    strsplit(",") |> unlist() |> as.numeric()
+  scenario_features <- scenario_vect_subset(vects, s_gid = scen_gids, 
+                                            baseline = is_baseline)
+  #scenario_feature_vals <- scenario_vect_get_values(scenario_features)
+  # scenario_plot_vect(scenario_features)
+  # a <- scenario_features
+  
+  #---
+  # rasterize and compute ZOI
+  
+  # suitability
+  scenarios_rast_rsf <- calc_zoi_local(vects = scenario_features, 
+                                       ref_raster = ref_rast, 
+                                       mod = mod_rsf, 
+                                       scenario_table = scenario_info,
+                                       s_gid = scen_gids,
+                                       model = "suit", 
+                                       output_type = "density",
+                                       baseline = is_baseline)
+  
+  # permeability
+  scenarios_rast_ssf <- calc_zoi_local(vects = scenario_features, 
+                                       ref_raster = ref_rast, 
+                                       mod = mod_ssf, 
+                                       scenario_table = scenario_info,
+                                       s_gid = scen_gids,
+                                       model = "perm", 
+                                       output_type = "density",
+                                       baseline = is_baseline)
+  
+  # check
+  plot(c(scenarios_rast_rsf$add, scenarios_rast_rsf$remove))
+  plot(c(scenarios_rast_ssf$add, scenarios_rast_ssf$remove))
+  
+  #---
+  # correct annotated data and predict
+  
+  # suitability
+  scen_dat_env_rsf <- data_load_prepare(scenario_info, s_gid = selected_scen, 
+                                        data = "env", model = "suit", 
+                                        scenario_rast = scenarios_rast_rsf, 
+                                        verbose = TRUE)
+  
+  # permeability
+  scen_dat_env_ssf <- data_load_prepare(scenario_info, s_gid = selected_scen,
+                                        data = "env", model = "perm", 
+                                        scenario_rast = scenarios_rast_ssf, 
+                                        verbose = TRUE)
+  
+  #---
+  # predict model in space
+  
+  # suitability
+  # set/get max
+  if(is_baseline) baseline_max_suit <- NULL else 
+    baseline_max_suit <- scenario_info$baseline_max_suit[scenario_info$s_gid == selected_scen]
+  # predict
+  scen_pred_rsf <- model_predict(scenario_info, s_gid = selected_scen, 
+                                 mod_rsf, scen_dat_env_rsf, dat_rsf, 
+                                 baseline_max = baseline_max_suit,
+                                 model = "suit", crs = paste0("epsg:", crs_no), 
+                                 verbose = TRUE)
+  scen_pred_rsf_rast <- scen_pred_rsf$rast
+  plot(scen_pred_rsf_rast)
+  
+  # permeability
+  # set/get max
+  if(is_baseline) baseline_max_perm <- NULL else 
+    baseline_max_perm  <- scenario_info$baseline_max_perm[scenario_info$s_gid == selected_scen]
+  # predict
+  scen_pred_ssf <- model_predict(scenario_info, s_gid = selected_scen, 
+                                 mod_ssf, scen_dat_env_ssf, dat_ssf, 
+                                 baseline_max = baseline_max_perm,
+                                 model = "perm", crs = paste0("epsg:", crs_no), 
+                                 verbose = TRUE)
+  scen_pred_ssf_rast <- scen_pred_ssf$rast
+  plot(scen_pred_ssf_rast)
+  
+  # register in scenario table
+  scenario_map_folder <- paste0("../03_output/")
+  scenario_map_prefix <- paste0("scenarios_",
+                                scenario_info$project_name[selected_scen], "_ss",
+                                scenario_info$scenset_id[selected_scen], "_s",
+                                selected_scen)
+  scenario_info <- scenario_table_update(scenario_info, s_gid = selected_scen,
+                                         scenario_folder_path = scenario_map_folder,
+                                         scenario_map_prefix = scenario_map_prefix, 
+                                         overwrite = TRUE)
+  
+  # update baseline_max in scenario table
+  if(is_baseline) {
+    which_update <- scenario_info$s_gid[scenario_info$scenset_id == scenario_info$scenset_id[scenario_info$s_gid == selected_scen]]
+    scenario_info <- scenario_table_update(scenario_info, s_gid = which_update,
+                                           baseline_max_suit = scen_pred_rsf$baseline_max,
+                                           baseline_max_perm = scen_pred_ssf$baseline_max,
+                                           overwrite = TRUE)
+  }
+  
+  # mask out area
+  scen_pred_rsf_rast <- terra::mask(scen_pred_rsf_rast, terra::vect(region)) |>
+    terra::crop(terra::vect(region), mask = TRUE)
+  if(mask_water) scen_pred_ssf_rast[water_rast == 1] <- NA
+  scen_pred_ssf_rast <- terra::mask(scen_pred_ssf_rast, terra::vect(region)) |>
+    terra::crop(terra::vect(region), mask = TRUE)
+  
+  # export suitability
+  (f <- paste0(scenario_map_prefix, "_100m_suit.asc"))
+  raster::writeRaster(raster::raster(scen_pred_rsf_rast),
+                      filename = paste0(scenario_map_folder, f),
+                      format = "ascii", overwrite = T)
+  
+  # export permeability
+  (f <- paste0(scenario_map_prefix, "_100m_perm.asc"))
+  raster::writeRaster(raster::raster(scen_pred_ssf_rast),
+                      filename = paste0(scenario_map_folder, f),
+                      format = "ascii", overwrite = T)
+  
+  # output in R
+  scenario_output[[cont]] <- c(scen_pred_rsf_rast, scen_pred_ssf_rast)
+  names(scenario_output)[cont] <- scenario_map_prefix
+}
+
+# for now, in a folder, later in PostGIS when it is complete
+# out_table <- paste0("scenarios_", scenario_info$project_name[1], 
+#                     "_ss", scenario_info$scenset_id[1])
+# write.csv(scenario_info, file = paste0(scenario_map_folder, out_table, ".csv"))
+# saveRDS(scenario_info, file = paste0(scenario_map_folder, out_table, ".rds"))
+```
+
+```{r}
+scen = 1:6
+
+cont <- 1
+plot_list <- list()
+for(cont in scen) {
+  
+  # plot suitability
+  map1 <- tm_shape(scenario_output[[cont]][["suit"]]) +
+    tm_raster(palette = "Greens", style = "cont", title = "Suitability") +
+    tm_layout(legend.position = c("LEFT", "BOTTOM")) +
+    tm_shape(region) +
+    tm_borders() + 
+    tm_compass()
+  
+  # plot permeability
+  map2 <- tm_shape(scenario_output[[cont]][["perm"]]) +
+    tm_raster(palette = "-Greys", style = "cont", title = "Permeability") +
+    tm_layout(legend.position = c("LEFT", "BOTTOM")) +
+    tm_shape(region) +
+    tm_borders() + 
+    tm_scale_bar(position = c("center", "BOTTOM"))
+  
+  #tm1 <- tmap_arrange(map1, map2, ncol = 2, nrow = 1)
+  plot_list[[cont]] <- list(map1, map2)
+  names(plot_list)[cont] <- names(scenario_output)[cont]
+}
+
+# tmap_arrange(plot_list[[1]][[1]], plot_list[[1]][[2]], 
+#              plot_list[[2]][[1]], plot_list[[2]][[2]], 
+#              ncol = 2, nrow = 2)
+# 
+# tmap_arrange(plot_list[[1]][[1]], plot_list[[1]][[2]], 
+#              plot_list[[3]][[1]], plot_list[[3]][[2]], 
+#              ncol = 2, nrow = 2)
+# 
+# tmap_arrange(plot_list[[1]][[1]], plot_list[[1]][[2]], 
+#              plot_list[[4]][[1]], plot_list[[4]][[2]], 
+#              ncol = 2, nrow = 2)
+
+tmap_arrange(plot_list[[1]][[1]], plot_list[[1]][[2]],
+             ncol = 2, nrow = 1)
+tmap_arrange(plot_list[[2]][[1]], plot_list[[2]][[2]], 
+             ncol = 2, nrow = 1)
+tmap_arrange(plot_list[[3]][[1]], plot_list[[3]][[2]], 
+             ncol = 2, nrow = 1)
+tmap_arrange(plot_list[[4]][[1]], plot_list[[4]][[2]], 
+             ncol = 2, nrow = 1)
+tmap_arrange(plot_list[[5]][[1]], plot_list[[5]][[2]], 
+             ncol = 2, nrow = 1)
+tmap_arrange(plot_list[[6]][[1]], plot_list[[6]][[2]], 
+             ncol = 2, nrow = 1)
+```
+
+# Update/save scenario info table
+
+Finally, we save the `scenario_info` table externally.
+
+```{r}
+# for now, in a folder, later in PostGIS when it is complete
+out_table <- paste0("scenarios_", scenario_info$project_name[1], 
+                    "_ss", scenario_info$scenset_id[1])
+write.csv(scenario_info, file = paste0(scenario_map_folder, out_table, ".csv"))
+saveRDS(scenario_info, file = paste0(scenario_map_folder, out_table, ".rds"))
+```
+

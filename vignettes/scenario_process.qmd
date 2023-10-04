@@ -1,0 +1,436 @@
+---
+title: "Computing and making sense of the connectivity maps"
+format: html
+---
+
+# Computing functionality and flow
+
+This is done via a quarto document with Julia chunks. The outputs of the script
+are the functionality and flow maps for each scenario.
+
+# Processing and summarizing the connectivity maps
+
+The next step is to process, visualize, and summarize the habitat and the 
+connectivity maps.
+
+## Packages
+
+```{r packages}
+library(dplyr)
+library(DT)
+
+library(terra)
+library(sf)
+library(tmap)
+
+library(oneimpact)
+```
+
+## Parameters
+
+```{r parms}
+crs_no <- 25833
+```
+
+## Connect to PostGIS
+
+```{r connect_pgis}
+# This connects to the gisdatabase with a DBI connection named `con`.
+# Use for example dbGetQuery(con, "SELECT * FROM ….") to query the database
+source("~/.pgpass")
+
+NinaR::postgreSQLConnect(
+  host = "gisdata-db.nina.no",
+  dbname = "gisdata",
+  username = pg_username,
+  password = pg_password
+)
+
+rm(pg_username, pg_password)
+```
+
+## Read scenario table
+
+```{r read_scenario_table}
+scen_tab_fil <- "../03_output/scenarios_mdir_2023_tiltak_rondane_ss1.rds"
+scenario_info <- readRDS(file = scen_tab_fil)
+```
+
+## Read region - official and practical polygons
+
+```{r get_region}
+# get region polygon
+region <- sf::st_read(con, 
+                      query = db_make_query("SELECT * FROM ",
+                                            scenario_info$region_postgis_layer[1],
+                                            " WHERE ",
+                                            scenario_info$region_postgis_condition[1]))
+
+# read official polygon
+region_official <- sf::st_read(con, 
+                               query = db_make_query("SELECT * FROM ",
+                                                     "sam_wrein_ancillary.reindeer_areas_official_2023",
+                                                     " WHERE ",
+                                                     "name_area = 'Rondane'"))
+
+# part of the official limits of Rondane within Rondane Nord
+region_official <- region_official |> 
+  sf::st_intersection(region)
+
+# plot(region_official[1])
+```
+
+## For one scenario
+
+### Select scenario
+
+```{r select1}
+# all scenarios
+scenario_info |> 
+  dplyr::select(s_gid, contains("scen")) |> 
+  DT::datatable()
+
+# select one scenario
+selected_scen <- 1
+```
+
+### Read maps
+
+```{r read1}
+# folder and prefix
+dir <- scenario_info$scenario_folder_path[selected_scen]
+pre <- scenario_info$scenario_map_prefix[selected_scen]
+
+# files
+patt <- c("suit", "perm", "func", "flow")
+ff <- list.files(dir, pattern = pre, full.names = TRUE) |> 
+  grep(pattern = paste(patt, collapse = "|"), value = TRUE) |> 
+  grep(pattern = ".asc$", value = TRUE)
+ff <- sapply(patt, function(x) grep(x, ff, value = T))
+
+# read
+maps <- terra::rast(ff)
+names(maps) <- patt
+terra::crs(maps) <- paste0("epsg:", crs_no)
+maps <- terra::crop(maps, region, mask = TRUE)
+
+# normalize suit and perm
+maps[[1]] <- oneimpact::raster_rescale(maps[[1]])
+maps[[2]] <- oneimpact::raster_rescale(maps[[2]])
+
+# sqrt + normalize functionality maps
+maps <- c(maps, sqrt(maps[[3]]))
+names(maps)[5] <- "func_sqrt"
+baseline_max_func_sq <- as.numeric(terra::global(maps[[5]], fun = quantile, prob = 0.975, na.rm = T))
+maps[[5]] <- maps[[5]]/baseline_max_func_sq
+maps[[5]] <- terra::ifel(maps[[5]] > 1, 1, maps[[5]])
+# normalize functionality maps
+baseline_max_func <- as.numeric(terra::global(maps[[3]], fun = quantile, prob = 0.975, na.rm = T))
+maps[[3]] <- maps[[3]]/baseline_max_func
+maps[[3]] <- terra::ifel(maps[[3]] > 1, 1, maps[[3]])
+
+# log + normalize flow maps
+maps <- c(maps, log(maps[[4]]))
+names(maps)[6] <- "flow_log"
+baseline_max_flow_log <- as.numeric(terra::global(maps[[6]], fun = quantile, prob = 0.975, na.rm = T))
+maps[[6]] <- oneimpact::raster_rescale(maps[[6]], to = c(0, baseline_max_flow_log))
+maps[[6]] <- terra::ifel(maps[[6]] > 1, 1, maps[[6]])
+# normalize flow maps
+baseline_max_flow_log <- as.numeric(terra::global(maps[[4]], fun = quantile, prob = 0.975, na.rm = T))
+maps[[4]] <- maps[[4]]/baseline_max_flow_log
+maps[[4]] <- terra::ifel(maps[[4]] > 1, 1, maps[[4]])
+
+# plot(maps)
+```
+
+### Plot maps
+
+```{r plot1}
+# plot suitability
+map1 <- tm_shape(maps[["suit"]]) +
+  tm_raster(palette = "Greens", style = "cont", title = "Suitability") +
+  tm_layout(legend.position = c("LEFT", "BOTTOM")) +
+  tm_shape(region) +
+  tm_borders() + 
+  tm_compass()
+map1
+
+# plot permeability
+map2 <- tm_shape(maps[["perm"]]) +
+  tm_raster(palette = "-Greys", style = "cont", title = "Permeability") +
+  tm_layout(legend.position = c("LEFT", "BOTTOM")) +
+  tm_shape(region) +
+  tm_borders() + 
+  tm_scale_bar(position = c("center", "BOTTOM"))
+map2
+
+map3 <- tm_shape(maps[["func"]]) +
+  tm_raster(palette = "viridis", style = "cont", title = "Functionality") +
+  tm_layout(legend.position = c("LEFT", "BOTTOM"), legend.bg.color = "white") +
+  tm_shape(region) +
+  tm_borders()
+map3
+
+map5 <- tm_shape(maps[["func_sqrt"]]) +
+  tm_raster(palette = "viridis", style = "cont", title = "ECA") +
+  tm_layout(legend.position = c("LEFT", "BOTTOM"), legend.bg.color = "white") +
+  tm_shape(region) +
+  tm_borders()
+map5
+
+map4 <- tm_shape(maps[["flow"]]) +
+  tm_raster(palette = "magma", style = "cont", title = "Flow") +
+  tm_layout(legend.position = c("LEFT", "BOTTOM"), legend.bg.color = "white") +
+  tm_shape(region) +
+  tm_borders()
+map4
+
+map6 <- tm_shape(maps[["flow_log"]]) +
+  tm_raster(palette = "magma", style = "cont", title = "log Flow") +
+  tm_layout(legend.position = c("LEFT", "BOTTOM"), legend.bg.color = "white") +
+  tm_shape(region) +
+  tm_borders()
+map6
+
+plot_list <- list(map1, map2, map3, map5, map4, map6)
+names(plot_list) <- c(patt[1:3], "func_sqrt", patt[4], "flow_log") 
+tmap::tmap_arrange(map1, map2, map3, map5, map4, map6, ncol = 3, nrow = 2)
+```
+
+### Summarize changes
+
+
+
+## For multiple scenarios
+
+### Read maps
+
+Read and normalize maps
+
+```{r read_multiple}
+patt <- c("suit", "perm", "func", "func", "func", "flow", "flow")
+patt2 <- c("suit", "perm", "func_orig", "func", "func_sqrt", "flow", "flow_log")
+scen = nrow(scenario_info)
+
+# read
+scenario_output <- list()
+for(cont in seq_along(patt2)) {
+  
+  # folder and prefix
+  dir <- scenario_info$scenario_folder_path[1]
+  pre <- scenario_info$scenario_map_prefix
+  
+  # files
+  pat <- patt[cont]
+  pat2 <- patt2[cont]
+  ff <- list.files(dir, pattern = pat, full.names = TRUE) |> 
+    grep(pattern = paste(pre, collapse = "|"), value = TRUE) |> 
+    grep(pattern = ".asc$", value = TRUE)
+  ff <- sort(ff)
+  
+  # read
+  scenario_output[[cont]] <- terra::rast(ff)
+  names(scenario_output[[cont]]) <- pre
+  names(scenario_output)[cont] <- pat2
+  # crs
+  terra::crs(scenario_output[[cont]]) <- paste0("epsg:", crs_no)
+  # crop and mask
+  scenario_output[[cont]] <- terra::crop(scenario_output[[cont]], region, mask = TRUE)
+  
+  # normalize suitability and permeability maps
+  if(pat2 %in% c("suit", "perm")) {
+    min_r <- terra::global(scenario_output[[cont]][[1]], fun = "min", na.rm = TRUE)$min
+    # max not needed, this was done before exporting
+    # max_r <- as.numeric(terra::global(scenario_output[[cont]][[1]], fun = quantile, probs = 0.975, na.rm = TRUE))
+    max_r <- terra::global(scenario_output[[cont]][[1]], fun = "max", na.rm = TRUE)$max
+    scenario_output[[cont]] <- oneimpact::raster_rescale(scenario_output[[cont]], 
+                                                         from = c(min_r, max_r))
+  }
+  
+  # normalize functionality maps
+  if(pat2 == "func") {
+    baseline_max_func <- terra::global(scenario_output[[cont]][[1]], fun = quantile, prob = 0.975, na.rm = T)[,1]
+    scenario_output[[cont]] <- scenario_output[[cont]]/baseline_max_func
+    scenario_output[[cont]] <- terra::ifel(scenario_output[[cont]] > 1, 1, scenario_output[[cont]])  
+  }
+  
+  # sqrt + normalize functionality maps
+  if(pat2 == "func_sqrt") {
+    scenario_output[[cont]] <- sqrt(scenario_output[[cont]])
+    baseline_max_func_sq <- terra::global(scenario_output[[cont]][[1]], fun = quantile, prob = 0.975, na.rm = T)[,1]
+    scenario_output[[cont]] <- scenario_output[[cont]]/baseline_max_func_sq
+    scenario_output[[cont]] <- terra::ifel(scenario_output[[cont]] > 1, 1, scenario_output[[cont]])
+  }
+  
+  # normalize flow maps
+  if(pat2 == "flow") {
+    baseline_max_flow <- terra::global(scenario_output[[cont]][[1]], fun = quantile, prob = 0.975, na.rm = T)[,1]
+    scenario_output[[cont]] <- scenario_output[[cont]]/baseline_max_flow
+    scenario_output[[cont]] <- terra::ifel(scenario_output[[cont]] > 1, 1, scenario_output[[cont]])  
+    min_r <- terra::global(scenario_output[[cont]][[1]], fun = "min", na.rm = TRUE)[,1]
+    # max_r <- as.numeric(terra::global(scenario_output[[cont]][[1]], fun = "max", na.rm = TRUE))
+    scenario_output[[cont]] <- oneimpact::raster_rescale(scenario_output[[cont]], from = c(min_r, 1))
+  }
+  
+  if(pat2 == "flow_log") {
+    # log + normalize flow maps
+    scenario_output[[cont]] <- log(scenario_output[[cont]])
+    baseline_max_flow_log <- terra::global(scenario_output[[cont]][[1]], fun = quantile, prob = 0.975, na.rm = T)[,1]
+    scenario_output[[cont]] <- scenario_output[[cont]]/baseline_max_flow_log
+    scenario_output[[cont]] <- terra::ifel(scenario_output[[cont]] > 1, 1, scenario_output[[cont]])
+    min_r <- terra::global(scenario_output[[cont]][[1]], fun = "min", na.rm = TRUE)[,1]
+    scenario_output[[cont]] <- oneimpact::raster_rescale(scenario_output[[cont]], from = c(min_r, 1))
+    
+    # scenario_output[[cont]] <- log(scenario_output[[cont]])
+    # baseline_max_flow_log <- terra::global(scenario_output[[cont]][[1]], fun = quantile, prob = 0.975, na.rm = T)[,1]
+    # scenario_output[[cont]] <- scenario_output[[cont]]/baseline_max_flow_log
+    # scenario_output[[cont]] <- terra::ifel(scenario_output[[cont]] > 1, 1, scenario_output[[cont]])
+    # min_r <- terra::global(scenario_output[[cont]][[1]], fun = "min", na.rm = TRUE)[,1]
+    # scenario_output[[cont]] <- oneimpact::raster_rescale(scenario_output[[cont]], from = c(min_r, 1))
+  }
+  
+  # min_r <- min(terra::global(scenario_output[[cont]], fun = "min", na.rm = TRUE)$min)
+  # max_r <- max(terra::global(scenario_output[[cont]], fun = "max", na.rm = TRUE)$max)
+  # for(i in 1:nlyr(scenario_output[[cont]])) plot(scenario_output[[cont]][[i]], range = c(min_r, max_r))
+  # for(i in 1:nlyr(scenario_output[[cont]])) plot(scenario_output[[cont]][[i]])
+}
+```
+
+### Plot maps
+
+```{r read_multiple}
+patt2 <- c("suit", "perm", "func", "func_sqrt", "flow", "flow_log")
+scenario_output_plot <- scenario_output[patt2] # remove original functionality from plots
+
+cont <- 1
+plot_list <- list()
+# loop over scenarios
+for(cont in seq_len(terra::nlyr(scenario_output_plot[[1]]))) {
+  
+  # plot suitability
+  map1 <- tm_shape(scenario_output_plot[[patt2[1]]][[cont]]) +
+    tm_raster(palette = "Greens", style = "cont", title = "Suitability") +
+    tm_layout(legend.position = c("LEFT", "BOTTOM")) +
+    tm_shape(region) +
+    tm_borders() + 
+    tm_compass()
+  # map1
+  
+  # plot permeability
+  map2 <- tm_shape(scenario_output_plot[[patt2[2]]][[cont]]) +
+    tm_raster(palette = "-Greys", style = "cont", title = "Permeability") +
+    tm_layout(legend.position = c("LEFT", "BOTTOM")) +
+    tm_shape(region) +
+    tm_borders() + 
+    tm_scale_bar(position = c("center", "BOTTOM"))
+  # map2
+  
+  # plot flow
+  map3 <- tm_shape(scenario_output_plot[[patt2[3]]][[cont]]) +
+    tm_raster(palette = "viridis", style = "cont", title = "Functionality") +
+    tm_layout(legend.position = c("LEFT", "BOTTOM")) +
+    tm_shape(region) +
+    tm_borders()
+  # map3
+  
+  map4 <- tm_shape(scenario_output_plot[[patt2[4]]][[cont]]) +
+    tm_raster(palette = "viridis", style = "cont", title = "ECH") +
+    tm_layout(legend.position = c("LEFT", "BOTTOM")) +
+    tm_shape(region) +
+    tm_borders()
+  # map4
+  
+  map5 <- tm_shape(scenario_output_plot[[patt2[5]]][[cont]]) +
+    tm_raster(palette = "magma", style = "cont", title = "Flow") +
+    tm_layout(legend.position = c("LEFT", "BOTTOM")) +
+    tm_shape(region) +
+    tm_borders()
+  # map5
+  
+  map6 <- tm_shape(scenario_output_plot[[patt2[6]]][[cont]]) +
+    tm_raster(palette = "magma", style = "cont", title = "log Flow") +
+    tm_layout(legend.position = c("LEFT", "BOTTOM")) +
+    tm_shape(region) +
+    tm_borders()
+  # map6
+  
+  plot_list <- list(map1, map2, map3, map5, map4, map6)
+  names(plot_list) <- scenario_info$scen_name 
+  print(tmap::tmap_arrange(map1, map2, map3, map5, map4, map6, ncol = 3, nrow = 2))
+}
+```
+
+### Save final maps
+
+```{r save_maps}
+str(scenario_output_plot, max.level = 2)
+
+# folder
+dir <- "../03_output/final_maps/"
+if(!dir.exists(dir)) dir.create(dir)
+
+# save
+
+# loop over layers
+for(i in seq_along(scenario_output_plot)) {
+  
+  # layer
+  ly <- names(scenario_output_plot)[i]
+  
+  # loop over scenarios
+  for(j in 1:terra::nlyr(scenario_output_plot[[i]])) {
+    
+    # name
+    name <- scenario_info$scen_nickname[j]
+    # map
+    kart <- scenario_output_plot[[i]][[j]]
+    # save
+    f_name <- paste0(dir, "scenario_", name, "_", ly, ".tif")
+    terra::writeRaster(kart, filename = f_name, overwrite = TRUE)
+    
+  }
+}
+```
+
+
+### Summarize changes
+
+```{r summ_change}
+patt2 <- c("suit", "perm", "func_orig", "func", "func_sqrt", "flow", "flow_sqrt")
+index <- seq_along(patt2)
+
+# crop maps for the official areas
+scenario_output_official <- lapply(index, function(i) scenario_output[[i]] |> 
+         terra::crop(region_official, mask = TRUE))
+names(scenario_output_official) <- names(scenario_output)
+
+# sums
+sums <- sapply(index, function(i) terra::global(scenario_output_official[[i]], fun = "sum", na.rm = TRUE))
+names(sums) <- names(scenario_output)
+sums <- sums[c("suit", "func_orig", "flow")]
+sums$func_orig <- sqrt(sums$func_orig) * prod(terra::res(scenario_output_official[[1]])) / 1e6 # km2
+
+#region_official |> sf::st_area() |> (\(x) x/1e6)()
+
+diff_change <- lapply(sums, function(x) x - x[1])
+prop_change <- lapply(sums, function(x) (x/x[1] - 1)*100)
+
+summ_tab <- scenario_info |> 
+  dplyr::select(s_gid, "project_name", "study_area", "sub_area", contains("scenset_"), contains("scen_")) |> 
+  dplyr::mutate(suit_sum = sums[[1]],
+                suit_prop_change = prop_change[[1]],
+                func_sum = sums[[2]],
+                func_prop_change = prop_change[[2]],
+                func_km2_prime = diff_change[[2]],
+                func_km2_avg = diff_change[[2]]/0.53,
+                flow_sum = sums[[3]],
+                flow_prop_change = prop_change[[3]])
+  # dplyr::mutate(suit = lapply(index, function(x) scenario_output[[x]][[1]])
+
+# export table
+summ_tab |> 
+  dplyr::select(s_gid, project_name, study_area, sub_area, scen_nickname, 
+                suit_prop_change, func_prop_change, flow_prop_change, contains("km2")) |> 
+  write.csv(file = "../03_output/final_maps/summary_table.csv", row.names = FALSE)
+```
+

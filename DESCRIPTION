@@ -1,13 +1,11 @@
 Package: oneimpactools
 Title: Tools for species distribution modeling, habitat selection modeling, and database 
-    management in OneImpact and GreenPlan projects
+    management in OneImpact and GreenPlan projects (maybe more on scenario analyses?)
 Version: 0.0.0.9000
 Authors@R: c(
      person("Bernardo", "Niebuhr", email = "bernardo_brandaum@yahoo.com.br",
         role = c("aut", "cre"), comment = c(ORCID = "0000-0002-0453-315X")),
     person("Manuela", "Panzacchi", email = "manuela.panzacchi@nina.no",
-        role = "aut"),
-    person("Neri", "Thorsen", email = "neri.thorsen@nina.no",
         role = "aut"),    
     person("Bram", "van Moorter", email = "bram.van.moorter@nina.no",
         role = "aut", comment = c(ORCID = "0000-0002-3196-1993")))
@@ -24,4 +22,5 @@ Imports:
     rgrass,
     terra,
     sf,
-    sfheaders
+    sfheaders,
+    samtools

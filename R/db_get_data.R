@@ -17,7 +17,7 @@ db_get_data <- function(con, table, condition = NULL, bbox = NULL,
 
   if(is.null(query)) {
     # query
-    qq <- oneimpactools::db_make_query("SELECT points_id, ST_X(ST_Transform(geom_e33, 25833)) as x33,
+    qq <- samtools::db_make_query("SELECT points_id, ST_X(ST_Transform(geom_e33, 25833)) as x33,
                                        ST_Y(ST_Transform(geom_e33, 25833)) as y33, *
                                        FROM ", table)
     # condition
@@ -28,11 +28,11 @@ db_get_data <- function(con, table, condition = NULL, bbox = NULL,
                                       "a.", coords[2], " > ", bbox[2], " AND ",
                                       "a.", coords[1], " < ", bbox[3], " AND ",
                                       "a.", coords[2], " < ", bbox[4])
-      qq <- oneimpactools::db_make_query("SELECT a.* FROM (", qq, ") a",
-                                         " WHERE ", bbox_condition)
+      qq <- samtools::db_make_query("SELECT a.* FROM (", qq, ") a",
+                                    " WHERE ", bbox_condition)
     }
     # close query
-    qq <- oneimpactools::db_make_query(qq, ";")
+    qq <- samtools::db_make_query(qq, ";")
   } else {
     qq <- query
   }

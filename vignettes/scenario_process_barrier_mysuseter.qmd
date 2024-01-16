@@ -53,7 +53,7 @@ rm(pg_username, pg_password)
 ## Read scenario table
 
 ```{r read_scenario_table}
-scen_tab_fil <- "/data/P-Prosjekter/41203800_oneimpact/06_analyses/01_tiltak_MDir_2022/03_output/barriers/scenarios_mdir_2023_tiltak_rondane_ss1.rds"
+scen_tab_fil <- "/data/P-Prosjekter/41203800_oneimpact/06_analyses/01_tiltak_MDir_2022/03_output/barriers2/scenarios_mdir_2023_tiltak_rondane_ss1.rds"
 scenario_info <- readRDS(file = scen_tab_fil)
 ```
 
@@ -79,7 +79,6 @@ region_official <- region_official |>
   sf::st_intersection(region)
 
 # plot(region_official[1])
-# sf::st_write(region_official, con, Id(schema = "sam_scenarios_wrein", table = "rondane_nord_official_limit"))
 ```
 
 We also read the barrier, to fill them with value ZERO in the flow maps.
@@ -320,7 +319,7 @@ for(cont in seq_along(patt2)) {
 ### Plot maps
 
 ```{r read_multiple}
-patt2 <- c("suit", "perm", "func_orig", "func", "func_sqrt", "flow", "flow_log")
+patt2 <- c("suit", "perm", "func", "func_sqrt", "flow", "flow_log")
 scenario_output_plot <- scenario_output[patt2] # remove original functionality from plots
 
 cont <- 1
@@ -347,28 +346,28 @@ for(cont in seq_len(terra::nlyr(scenario_output_plot[[1]]))) {
   # map2
   
   # plot flow
-  map3 <- tm_shape(scenario_output_plot[[patt2[4]]][[cont]]) +
+  map3 <- tm_shape(scenario_output_plot[[patt2[3]]][[cont]]) +
     tm_raster(palette = "viridis", style = "cont", title = "Functionality") +
     tm_layout(legend.position = c("LEFT", "BOTTOM")) +
     tm_shape(region) +
     tm_borders()
   # map3
   
-  map4 <- tm_shape(scenario_output_plot[[patt2[5]]][[cont]]) +
+  map4 <- tm_shape(scenario_output_plot[[patt2[4]]][[cont]]) +
     tm_raster(palette = "viridis", style = "cont", title = "ECH") +
     tm_layout(legend.position = c("LEFT", "BOTTOM")) +
     tm_shape(region) +
     tm_borders()
   # map4
   
-  map5 <- tm_shape(scenario_output_plot[[patt2[6]]][[cont]]) +
+  map5 <- tm_shape(scenario_output_plot[[patt2[5]]][[cont]]) +
     tm_raster(palette = "magma", style = "cont", title = "Flow") +
     tm_layout(legend.position = c("LEFT", "BOTTOM")) +
     tm_shape(region) +
     tm_borders()
   # map5
   
-  map6 <- tm_shape(scenario_output_plot[[patt2[7]]][[cont]]) +
+  map6 <- tm_shape(scenario_output_plot[[patt2[6]]][[cont]]) +
     tm_raster(palette = "magma", style = "cont", title = "log Flow") +
     tm_layout(legend.position = c("LEFT", "BOTTOM")) +
     tm_shape(region) +
@@ -388,7 +387,7 @@ for(cont in seq_len(terra::nlyr(scenario_output_plot[[1]]))) {
 str(scenario_output_plot, max.level = 2)
 
 # folder
-dir <- "/data/P-Prosjekter/41203800_oneimpact/06_analyses/01_tiltak_MDir_2022/03_output/barriers/final_maps/"
+dir <- "/data/P-Prosjekter/41203800_oneimpact/06_analyses/01_tiltak_MDir_2022/03_output/barriers2/final_maps/"
 if(!dir.exists(dir)) dir.create(dir)
 
 # save
@@ -453,7 +452,7 @@ summ_tab <- scenario_info |>
 summ_tab |> 
   dplyr::select(s_gid, project_name, study_area, sub_area, scen_nickname, 
                 suit_prop_change, func_prop_change, flow_prop_change, contains("km2")) |> 
-  write.csv(file = paste0("/data/P-Prosjekter/41203800_oneimpact/06_analyses/01_tiltak_MDir_2022/03_output/barriers/final_maps/summary_table", dist_decay, ".csv"), row.names = FALSE)
+  write.csv(file = paste0("/data/P-Prosjekter/41203800_oneimpact/06_analyses/01_tiltak_MDir_2022/03_output/barriers2/final_maps/summary_table", dist_decay, ".csv"), row.names = FALSE)
 
 summ_tab |> 
   dplyr::select(s_gid, project_name, study_area, sub_area, scen_nickname, 

@@ -1,4 +1,7 @@
-
+#' Correct the ZOI after local changes/perturbations
+#'
+#' Describe function here.
+#'
 #' @export
 calc_zoi_local <- function(vects, ref_raster, mod, scenario_table, s_gid = 1,
                            model = c("suit", "perm")[1],
@@ -75,17 +78,33 @@ calc_zoi_local <- function(vects, ref_raster, mod, scenario_table, s_gid = 1,
         vv <- vects[[gt]]
         if(scenario_info$baseline[scenario_info$s_gid == ss]) {
           vv <- terra::subset(vv, vv$layer == ly & vv[["changebase"]] == ch)
+          if(length(vv) > 0) {
+            duplicated <- sf::st_as_sf(vv) |> dplyr::select(param_vals, geometry) |> duplicated()
+            vv <- vv[!duplicated,]
+          }
         } else {
           vv <- terra::subset(vv, vv$layer == ly & ( (vv[["changebase"]] == ch & (vv$s_gid != ss)) | (vv[["change"]] == ch & vv$s_gid == ss) ))
+          if(length(vv) > 0) {
+            duplicated <- sf::st_as_sf(vv) |> dplyr::select(param_vals, geometry) |> duplicated()
+            vv <- vv[!duplicated,]
+          }
         }
         v <- rbind(v, vv)
       }
     }
 
-
+    # think better here
     # remove repeated features
-    duplicated <- sf::st_as_sf(v) |> dplyr::select(geometry) |> duplicated()
-    v <- v[!duplicated,]
+    if(length(v) > 0) {
+      duplicated <- sf::st_as_sf(v) |> dplyr::select(param_vals, geometry) |> duplicated()
+      v <- v[!duplicated,]
+
+      # check if the features were added and removed
+      # remove them in this case
+      add_and_remove <- (v[["changebase"]] == "add" & v[["change"]] == "remove") | (v[["changebase"]] == "remove" & v[["change"]] == "add")
+      add_and_remove[is.na(add_and_remove)] <- FALSE
+      v <- terra::subset(v, !(sapply(v[["s_gid"]], function(x) x %in% s_gid) & add_and_remove))
+    }
 
     # check if there were any features of this type
     if(length(v) > 0) {
@@ -205,7 +224,7 @@ calc_zoi_local <- function(vects, ref_raster, mod, scenario_table, s_gid = 1,
         } else {
           cc <- counter_remove
           counter_remove <- counter_remove + 1
-          signal = -1
+          signal = 1
         }
 
         # if it is a zoi variable (zoi or cross-100m)

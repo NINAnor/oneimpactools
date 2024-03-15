@@ -24,3 +24,5 @@ Imports:
     sf,
     sfheaders,
     samtools
+Remotes:
+    NINAnor/samtools

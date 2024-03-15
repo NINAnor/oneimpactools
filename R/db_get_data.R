@@ -19,7 +19,13 @@
 #' queries and restricting the data retrieved to a spatial bounding box passed as
 #' a parameter.
 #'
-#' @param con ``
+#' @param con `[PqConnection]` \cr Connection to a Postgres database.
+#' @param table `[string]` \cr The name of a table within a PostgreSQL/PostGIS database,
+#' in the format `"name_of_schema.name_of_table"`.
+#' @param condition `[string]` \cr SQL condition passed to a "WHERE" clause
+#' (e.g. "country == 'Norway'", where "country" is a column in `table` and 'Norway'
+#' is one of the values in this column).
+#' @param bbox `[]`
 #' @param cols `[string]` \cr Columns to be selected from `table`.
 #'
 #' @export
@@ -28,18 +34,21 @@ db_get_data <- function(con, table,
                         bbox = NULL,
                         gid_col = "points_id",
                         cols = "*",
+                        coords_orig = c("x", "y"),
                         coords = c("x33", "y33"),
                         geom = "geom_e33",
                         reproject = FALSE,
                         crs = 25833,
                         query = NULL,
+                        verbose = FALSE,
+                        do_not_run = FALSE,
                         save_file = "") {
 
   if(is.null(query)) {
     # query
     qq <- samtools::db_make_query("SELECT ", gid_col, ", ", # take points_id/gif
-                                  ifelse(reproject, paste0("ST_X(ST_Transform(",geom,", ",crs,")) as ",coords[1]), coords[1]), ", ", # X coord
-                                  ifelse(reproject, paste0("ST_Y(ST_Transform(",geom,", ",crs,")) as ",coords[2]), coords[2]), # Y coord
+                                  ifelse(reproject, paste0("ST_X(ST_Transform(",geom,", ",crs,")) as ",coords[1]), paste0(coords_orig[1], " AS ", coords[1])), ", ", # X coord
+                                  ifelse(reproject, paste0("ST_Y(ST_Transform(",geom,", ",crs,")) as ",coords[2]), paste0(coords_orig[2], " AS ", coords[2])), # Y coord
                                   ifelse(cols == "", "", paste0(", ", cols)), # select cols
                                   " FROM ", table)
     # condition
@@ -58,6 +67,13 @@ db_get_data <- function(con, table,
   } else {
     qq <- query
   }
+
+  # print query if verbose
+  if(verbose) print("This is your query:")
+  if(verbose) print(qq)
+
+  # stop before querying if do_not_run
+  if(do_not_run) stop("To run the query, select do_not_run = FALSE.")
 
   # get as table
   dat <- sf::st_read(con, query = qq)

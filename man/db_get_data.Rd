@@ -11,13 +11,30 @@ db_get_data(
   bbox = NULL,
   gid_col = "points_id",
   cols = "*",
+  coords_orig = c("x", "y"),
   coords = c("x33", "y33"),
   geom = "geom_e33",
   reproject = FALSE,
   crs = 25833,
   query = NULL,
+  verbose = FALSE,
+  do_not_run = FALSE,
   save_file = ""
 )
+}
+\arguments{
+\item{con}{\verb{[PqConnection]} \cr Connection to a Postgres database.}
+
+\item{table}{\verb{[string]} \cr The name of a table within a PostgreSQL/PostGIS database,
+in the format \code{"name_of_schema.name_of_table"}.}
+
+\item{condition}{\verb{[string]} \cr SQL condition passed to a "WHERE" clause
+(e.g. "country == 'Norway'", where "country" is a column in \code{table} and 'Norway'
+is one of the values in this column).}
+
+\item{bbox}{\verb{[]}}
+
+\item{cols}{\verb{[string]} \cr Columns to be selected from \code{table}.}
 }
 \description{
 This function retrieves the spatial grid for Norway annotated with environmental

@@ -9,25 +9,47 @@
 
 # save_file must be a rda file "path/file.rda".
 
+#' Get spatial/grid data from the PostGIS database
+#'
+#' This function retrieves the spatial grid for Norway annotated with environmental
+#' data. The function is adapted to the version of the reindeer models from
+#' Renewable Reindeer/ProdChange and needs to be changed if model/data structure is
+#' changed.
+#' The function retrieves the spatial grid, including possibly conditions or specific
+#' queries and restricting the data retrieved to a spatial bounding box passed as
+#' a parameter.
+#'
+#' @param con ``
+#' @param cols `[string]` \cr Columns to be selected from `table`.
+#'
 #' @export
-db_get_data <- function(con, table, condition = NULL, bbox = NULL,
+db_get_data <- function(con, table,
+                        condition = NULL,
+                        bbox = NULL,
+                        gid_col = "points_id",
+                        cols = "*",
                         coords = c("x33", "y33"),
+                        geom = "geom_e33",
+                        reproject = FALSE,
+                        crs = 25833,
                         query = NULL,
                         save_file = "") {
 
   if(is.null(query)) {
     # query
-    qq <- samtools::db_make_query("SELECT points_id, ST_X(ST_Transform(geom_e33, 25833)) as x33,
-                                       ST_Y(ST_Transform(geom_e33, 25833)) as y33, *
-                                       FROM ", table)
+    qq <- samtools::db_make_query("SELECT ", gid_col, ", ", # take points_id/gif
+                                  ifelse(reproject, paste0("ST_X(ST_Transform(",geom,", ",crs,")) as ",coords[1]), coords[1]), ", ", # X coord
+                                  ifelse(reproject, paste0("ST_Y(ST_Transform(",geom,", ",crs,")) as ",coords[2]), coords[2]), # Y coord
+                                  ifelse(cols == "", "", paste0(", ", cols)), # select cols
+                                  " FROM ", table)
     # condition
-    if(!is.null(condition)) qq <- oneimpactools::db_make_query(qq, " WHERE ", condition)
+    if(!is.null(condition)) qq <- samtools::db_make_query(qq, " WHERE ", condition)
     # bbox
     if(!is.null(bbox)) {
-      bbox_condition <- db_make_query("a.", coords[1], " > ", bbox[1], " AND ",
-                                      "a.", coords[2], " > ", bbox[2], " AND ",
-                                      "a.", coords[1], " < ", bbox[3], " AND ",
-                                      "a.", coords[2], " < ", bbox[4])
+      bbox_condition <- samtools::db_make_query("a.", coords[1], " > ", bbox[1], " AND ",
+                                                "a.", coords[2], " > ", bbox[2], " AND ",
+                                                "a.", coords[1], " < ", bbox[3], " AND ",
+                                                "a.", coords[2], " < ", bbox[4])
       qq <- samtools::db_make_query("SELECT a.* FROM (", qq, ") a",
                                     " WHERE ", bbox_condition)
     }

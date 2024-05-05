@@ -22,7 +22,6 @@ Imports:
     rgrass,
     terra,
     sf,
-    sfheaders,
-    samtools
+    sfheaders
 Remotes:
     NINAnor/samtools

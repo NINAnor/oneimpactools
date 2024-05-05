@@ -31,16 +31,22 @@ scenario_table_create(
   region_postgis_layer = NA,
   region_postgis_condition = NA,
   grass_mapset = NA,
-  model_suit_object_path = NA,
-  model_suit_object = NA,
-  model_suit_formula = NA,
-  model_suit_covariates = NA,
+  model_suit_s_object_path = NA,
+  model_suit_s_object = NA,
+  model_suit_s_formula = NA,
+  model_suit_s_covariates = NA,
+  model_suit_t_object_path = NA,
+  model_suit_t_object = NA,
+  model_suit_t_formula = NA,
+  model_suit_t_covariates = NA,
   model_perm_object_path = NA,
   model_perm_object = NA,
   model_perm_formula = NA,
   model_perm_covariates = NA,
-  data_suit_object_path = NA,
-  data_suit_object = NA,
+  data_suit_s_object_path = NA,
+  data_suit_s_object = NA,
+  data_suit_t_object_path = NA,
+  data_suit_t_object = NA,
   data_perm_object_path = NA,
   data_perm_object = NA,
   data_env_object_path = NA,
@@ -85,16 +91,22 @@ scenario_table_update(
   region_postgis_layer = NA,
   region_postgis_condition = NA,
   grass_mapset = NA,
-  model_suit_object_path = NA,
-  model_suit_object = NA,
-  model_suit_formula = NA,
-  model_suit_covariates = NA,
+  model_suit_s_object_path = NA,
+  model_suit_s_object = NA,
+  model_suit_s_formula = NA,
+  model_suit_s_covariates = NA,
+  model_suit_t_object_path = NA,
+  model_suit_t_object = NA,
+  model_suit_t_formula = NA,
+  model_suit_t_covariates = NA,
   model_perm_object_path = NA,
   model_perm_object = NA,
   model_perm_formula = NA,
   model_perm_covariates = NA,
-  data_suit_object_path = NA,
-  data_suit_object = NA,
+  data_suit_s_object_path = NA,
+  data_suit_s_object = NA,
+  data_suit_t_object_path = NA,
+  data_suit_t_object = NA,
   data_perm_object_path = NA,
   data_perm_object = NA,
   data_env_object_path = NA,
@@ -139,16 +151,22 @@ scenario_table_add(
   region_postgis_layer = NA,
   region_postgis_condition = NA,
   grass_mapset = NA,
-  model_suit_object_path = NA,
-  model_suit_object = NA,
-  model_suit_formula = NA,
-  model_suit_covariates = NA,
+  model_suit_s_object_path = NA,
+  model_suit_s_object = NA,
+  model_suit_s_formula = NA,
+  model_suit_s_covariates = NA,
+  model_suit_t_object_path = NA,
+  model_suit_t_object = NA,
+  model_suit_t_formula = NA,
+  model_suit_t_covariates = NA,
   model_perm_object_path = NA,
   model_perm_object = NA,
   model_perm_formula = NA,
   model_perm_covariates = NA,
-  data_suit_object_path = NA,
-  data_suit_object = NA,
+  data_suit_s_object_path = NA,
+  data_suit_s_object = NA,
+  data_suit_t_object_path = NA,
+  data_suit_t_object = NA,
   data_perm_object_path = NA,
   data_perm_object = NA,
   data_env_object_path = NA,
@@ -229,18 +247,6 @@ Should be in the format \code{"folder_name/file_name.extension"}.}
 
 \item{region_postgis_condition}{= NA}
 
-\item{model_suit_object_path}{\verb{[character(1)=NA]} \cr Path to the habitat
-suitability model (RSF/ENM) object with coefficient estimates.}
-
-\item{model_suit_object}{\verb{[character(1)=NA]} \cr Habitat suitability model
-object (RSF/ENM) with coefficient estimates.}
-
-\item{model_suit_formula}{\verb{[character(1)=NA]} \cr Formula for the habitat
-suitability model (RSF/ENM).}
-
-\item{model_suit_covariates}{\verb{[character(1)=NA]} \cr Covariates included in the
-habitat suitability model (RSF/ENM).}
-
 \item{model_perm_object_path}{\verb{[character(1)=NA]} \cr Path to the habitat
 permeability model (SSF) object with coefficient estimates.}
 
@@ -252,10 +258,6 @@ permeability model (SSF).}
 
 \item{model_perm_covariates}{\verb{[character(1)=NA]} \cr Covariates included in the
 habitat permeability model (SSF).}
-
-\item{data_suit_object_path}{\verb{[character(1)=NA]} \cr}
-
-\item{data_suit_object}{\verb{[character(1)=NA]} \cr}
 
 \item{data_perm_object_path}{\verb{[character(1)=NA]} \cr}
 
@@ -291,6 +293,22 @@ the region and mas. Should be in the format \code{"schema.table"}.}
 \item{region_file_path}{Raster or vector to define the region}
 
 \item{region_file_mask}{Raster or vector to use as mask}
+
+\item{model_suit_object_path}{\verb{[character(1)=NA]} \cr Path to the habitat
+suitability model (RSF/ENM) object with coefficient estimates.}
+
+\item{model_suit_object}{\verb{[character(1)=NA]} \cr Habitat suitability model
+object (RSF/ENM) with coefficient estimates.}
+
+\item{model_suit_formula}{\verb{[character(1)=NA]} \cr Formula for the habitat
+suitability model (RSF/ENM).}
+
+\item{model_suit_covariates}{\verb{[character(1)=NA]} \cr Covariates included in the
+habitat suitability model (RSF/ENM).}
+
+\item{data_suit_object_path}{\verb{[character(1)=NA]} \cr}
+
+\item{data_suit_object}{\verb{[character(1)=NA]} \cr}
 
 \item{zoi_variables}{\verb{[character(1)=NA]} \cr}
 

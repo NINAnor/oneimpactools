@@ -136,16 +136,22 @@ scenario_table_create <- function(s_gid = 1,
                                   region_postgis_layer = NA,
                                   region_postgis_condition = NA,
                                   grass_mapset = NA,
-                                  model_suit_object_path = NA,
-                                  model_suit_object = NA,
-                                  model_suit_formula = NA,
-                                  model_suit_covariates = NA,
+                                  model_suit_s_object_path = NA,
+                                  model_suit_s_object = NA,
+                                  model_suit_s_formula = NA,
+                                  model_suit_s_covariates = NA,
+                                  model_suit_t_object_path = NA,
+                                  model_suit_t_object = NA,
+                                  model_suit_t_formula = NA,
+                                  model_suit_t_covariates = NA,
                                   model_perm_object_path = NA,
                                   model_perm_object = NA,
                                   model_perm_formula = NA,
                                   model_perm_covariates = NA,
-                                  data_suit_object_path = NA,
-                                  data_suit_object = NA,
+                                  data_suit_s_object_path = NA,
+                                  data_suit_s_object = NA,
+                                  data_suit_t_object_path = NA,
+                                  data_suit_t_object = NA,
                                   data_perm_object_path = NA,
                                   data_perm_object = NA,
                                   # data_bio_object_path = NA,
@@ -201,16 +207,22 @@ scenario_table_create <- function(s_gid = 1,
                    region_postgis_layer = region_postgis_layer,
                    region_postgis_condition = region_postgis_condition,
                    grass_mapset = grass_mapset,
-                   model_suit_object_path = model_suit_object_path,
-                   model_suit_object = model_suit_object,
-                   model_suit_formula = model_suit_formula,
-                   model_suit_covariates = model_suit_covariates,
+                   model_suit_s_object_path = model_suit_s_object_path,
+                   model_suit_s_object = model_suit_s_object,
+                   model_suit_s_formula = model_suit_s_formula,
+                   model_suit_s_covariates = model_suit_s_covariates,
+                   model_suit_t_object_path = model_suit_t_object_path,
+                   model_suit_t_object = model_suit_t_object,
+                   model_suit_t_formula = model_suit_t_formula,
+                   model_suit_t_covariates = model_suit_t_covariates,
                    model_perm_object_path = model_perm_object_path,
                    model_perm_object = model_perm_object,
                    model_perm_formula = model_perm_formula,
                    model_perm_covariates = model_perm_covariates,
-                   data_suit_object_path = data_suit_object_path,
-                   data_suit_object = data_suit_object,
+                   data_suit_s_object_path = data_suit_s_object_path,
+                   data_suit_s_object = data_suit_s_object,
+                   data_suit_t_object_path = data_suit_t_object_path,
+                   data_suit_t_object = data_suit_t_object,
                    data_perm_object_path = data_perm_object_path,
                    data_perm_object = data_perm_object,
                    data_env_object_path = data_env_object_path,
@@ -270,16 +282,22 @@ scenario_table_update <- function(scenario_table, s_gid = NA,
                                   region_postgis_layer = NA,
                                   region_postgis_condition = NA,
                                   grass_mapset = NA,
-                                  model_suit_object_path = NA,
-                                  model_suit_object = NA,
-                                  model_suit_formula = NA,
-                                  model_suit_covariates = NA,
+                                  model_suit_s_object_path = NA,
+                                  model_suit_s_object = NA,
+                                  model_suit_s_formula = NA,
+                                  model_suit_s_covariates = NA,
+                                  model_suit_t_object_path = NA,
+                                  model_suit_t_object = NA,
+                                  model_suit_t_formula = NA,
+                                  model_suit_t_covariates = NA,
                                   model_perm_object_path = NA,
                                   model_perm_object = NA,
                                   model_perm_formula = NA,
                                   model_perm_covariates = NA,
-                                  data_suit_object_path = NA,
-                                  data_suit_object = NA,
+                                  data_suit_s_object_path = NA,
+                                  data_suit_s_object = NA,
+                                  data_suit_t_object_path = NA,
+                                  data_suit_t_object = NA,
                                   data_perm_object_path = NA,
                                   data_perm_object = NA,
                                   data_env_object_path = NA,
@@ -313,15 +331,20 @@ scenario_table_update <- function(scenario_table, s_gid = NA,
   # key column
   if(all(is.na(s_gid)) & all(is.na(scen_id))) stop("One key/reference column must be provided. Please check the values for 's_gid' and 'scen_id'.")
 
-  # season
-  season_options <- c("winter", "spring", "calving", "summer", "autumn", "fall", "all") # for reindeer, check it for other species
-  if(!is.na(season) & !all(grepl(paste(season_options, collapse = "|"), season, ignore.case = TRUE)))
-    stop(paste0("The parameter for 'season' is not valid. Please select on of: ", paste(season_options, collapse = ","), " or NA."))
-
-  # intra-inter
-  intra_inter_season_options <- c("intra", "inter", "all")
-  if(!is.na(intra_inter_season) & !all(grepl(paste(intra_inter_season_options, collapse = "|"), intra_inter_season, ignore.case = TRUE)))
-    stop(paste0("The parameter for 'intra_inter_season' is not valid. Please select on of: ", paste(intra_inter_season_options, collapse = ",")))
+  # season check if intra_inter_season = "intra"
+  # For multiple values of season and intra_inter_season, we need to better heck for each combination if it is consistent - LATER
+  # season_options <- c("winter", "spring", "calving", "summer", "autumn", "fall") # for reindeer, check it for other species
+  # if(!is.na(season)) {
+  #   for(each_season in season)  {
+  #     if(!is.na(each_season) & intra_inter_season == "intra" & !all(grepl(paste(season_options, collapse = "|"), season, ignore.case = TRUE)))
+  #       stop(paste0("The parameter for 'season' is not valid. Please select on of: ", paste(season_options, collapse = ","), " or NA."))
+  #   }
+  # }
+  #
+  # # intra-inter
+  # intra_inter_season_options <- c("intra", "inter")
+  # if(!is.na(intra_inter_season) & !all(grepl(paste(intra_inter_season_options, collapse = "|"), intra_inter_season, ignore.case = TRUE)))
+  #   stop(paste0("The parameter for 'intra_inter_season' is not valid. Please select on of: ", paste(intra_inter_season_options, collapse = ",")))
 
   #----
   # table
@@ -418,16 +441,22 @@ scenario_table_add <- function(scenario_table,
                                region_postgis_layer = NA,
                                region_postgis_condition = NA,
                                grass_mapset = NA,
-                               model_suit_object_path = NA,
-                               model_suit_object = NA,
-                               model_suit_formula = NA,
-                               model_suit_covariates = NA,
+                               model_suit_s_object_path = NA,
+                               model_suit_s_object = NA,
+                               model_suit_s_formula = NA,
+                               model_suit_s_covariates = NA,
+                               model_suit_t_object_path = NA,
+                               model_suit_t_object = NA,
+                               model_suit_t_formula = NA,
+                               model_suit_t_covariates = NA,
                                model_perm_object_path = NA,
                                model_perm_object = NA,
                                model_perm_formula = NA,
                                model_perm_covariates = NA,
-                               data_suit_object_path = NA,
-                               data_suit_object = NA,
+                               data_suit_s_object_path = NA,
+                               data_suit_s_object = NA,
+                               data_suit_t_object_path = NA,
+                               data_suit_t_object = NA,
                                data_perm_object_path = NA,
                                data_perm_object = NA,
                                data_env_object_path = NA,

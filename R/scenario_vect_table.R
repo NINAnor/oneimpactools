@@ -158,7 +158,7 @@ scenario_vect_read <- function(scenario_table, con,
       feats[[j]] <- NA
     } else {
       # read vector
-      v <- oneimpactools::db_read_vect(con, f, return_format = "terra")
+      v <- samtools::db_read_vect(con, f, return_format = "terra")
 
       # subset?
       if(subset_scenarios) {

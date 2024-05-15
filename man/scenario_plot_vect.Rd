@@ -13,6 +13,7 @@ scenario_plot_vect(
   pal_pts = "cat",
   pal_lin = "div",
   pal_pol = "div",
+  crs = 25833,
   ...
 )
 }

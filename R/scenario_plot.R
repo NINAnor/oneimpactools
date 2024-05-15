@@ -13,6 +13,7 @@
 scenario_plot_vect <- function(vects, add = TRUE,
                                col_pts= "red", col_lin = "black", col_pol = "grey",
                                pal_pts = "cat", pal_lin = "div", pal_pol = "div",
+                               crs = 25833,
                                ...) {
 
   # identify NAs
@@ -23,7 +24,7 @@ scenario_plot_vect <- function(vects, add = TRUE,
   lim_min <- apply(lims, 1, min)
   lim_max <- apply(lims, 1, max)
   e <- terra::ext(lim_min[1], lim_max[3], lim_min[2], lim_max[4]) |>
-    st_bbox()
+    st_bbox(crs = crs)
 
   # map
   m <- NULL
@@ -31,7 +32,7 @@ scenario_plot_vect <- function(vects, add = TRUE,
   # polygons
   if(isthere[3]) {
     m <- vects$pol |>
-      sf::st_as_sf() |>
+      sf::st_as_sf(crs = crs) |>
       tmap::tm_shape(bbox = e) +
       tmap::tm_borders(col = col_pol, palette = pal_pol, title.col = "Polygons")
   }
@@ -40,9 +41,9 @@ scenario_plot_vect <- function(vects, add = TRUE,
   if(isthere[2]) {
 
     m2 <- vects$lin |>
-      sf::st_as_sf() |>
+      sf::st_as_sf(crs = crs) |>
       tmap::tm_shape(bbox = e) +
-      tmap::tm_lines(col = col_lin, palette = pal_lin)
+      tmap::tm_lines(col = col_lin, col.scale = tm_scale_categorical(pal_lin))
 
     # initialize
     if(is.null(m)) {
@@ -58,9 +59,9 @@ scenario_plot_vect <- function(vects, add = TRUE,
   if(isthere[1]) {
 
     m3 <- vects$pts |>
-      sf::st_as_sf() |>
+      sf::st_as_sf(crs = crs) |>
       tmap::tm_shape(bbox = e) +
-      tmap::tm_dots(col = col_pts, size = 0.3, palette = pal_pts)
+      tmap::tm_dots(fill = col_pts, size = 0.3, col.scale = tm_scale_categorical(pal_pts))
 
     # initialize
     if(is.null(m)) {

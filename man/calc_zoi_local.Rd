@@ -10,6 +10,7 @@ calc_zoi_local(
   mod,
   scenario_table,
   s_gid = 1,
+  season,
   model = c("suit", "perm")[1],
   baseline = FALSE,
   where = c("R", "GRASS")[1],
@@ -21,5 +22,34 @@ calc_zoi_local(
 )
 }
 \description{
-Describe function here.
+This function prepares the raster layers to be added or removed in a scenario
+analysis, including the zone of influence (ZOI) of the covariate if that is
+included in the model.
+}
+\details{
+The function follows the steps below:
+\enumerate{
+\item First, the function gets the list of features to be changed from the \code{vects} object,
+a list of vector objects which might contain points (\code{pts}), lines (\code{lin}), and
+polygons (\code{pol}) to be added or removed. Whether the variable will be included
+in a specific scenario or not depends on the scenario id \code{s_gid} (which is provided
+as argument for the function and is also present in the \code{s_gid} and \code{repeated}
+columns in the attribute table of the vectors in \code{vects}). A given feature/variable
+will also only be relevant from a scenario if the variable is present in the model \code{mod}.
+Since models change across seasons, the \code{season} must also be provided as a
+parameter (BUT: it could also be retrieved from the \code{scenario_table} for the
+given \code{s_gid} -- TO BE IMPROVED).
+\item Once the relevant features to be changed are selected within a scenario,
+the algorithm divides them into those to be added and removed, which is set
+in the attribute tables from the \code{vects} layers,
+in the \code{changebase} column (for changes/corrections in the baselise scenario)
+and/or the \code{change} column (for the different scenarios).
+\item The algorithm then rasterizes the features to be changed according to the
+relevant type of rasterization specified in the column  (as it is for \code{raw}, counting the number of
+features per pixel for \code{count}, and using a "value" from a column for \code{value}, cretrieves the
+as well as the reference raster \code{ref_raster}, used to raserize the
+predictions.
+}
+
+On
 }

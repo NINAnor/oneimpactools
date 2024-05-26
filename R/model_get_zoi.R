@@ -5,7 +5,7 @@
 #' to select them from the model formula.
 #'
 #' @export
-model_get_zoi <- function(mod, variable, season, separator = "_") {
+model_get_zoi <- function(mod, variable, season, model, separator = "_") {
 
   # get covariates
   covars <- base::all.vars(mod$formula)[-1]
@@ -21,6 +21,14 @@ model_get_zoi <- function(mod, variable, season, separator = "_") {
     variable <- sub(pattern = "summer", replacement = "winter", variable)
     variable <- sub(pattern = "roads_low", replacement = "roads_winter_low", variable)
     variable <- sub(pattern = "roads_high", replacement = "roads_winter_high", variable)
+    if(grepl("cal|calving", season, ignore.case = TRUE)) {
+      variable <- sub(pattern = "skitracks_high", replacement = "skitracks_cal_high", variable)
+      variable <- sub(pattern = "skitracks_low", replacement = "skitracks_cal_low", variable)
+    }
+    if(grepl("win|winter", season, ignore.case = TRUE)) {
+      variable <- sub(pattern = "skitracks_high", replacement = "skitracks_win_high", variable)
+      variable <- sub(pattern = "skitracks_low", replacement = "skitracks_win_low", variable)
+    }
   } else {
     variable <- sub(pattern = "roads_low", replacement = "roads_summer_low", variable)
     variable <- sub(pattern = "roads_high", replacement = "roads_summer_high", variable)
@@ -29,15 +37,27 @@ model_get_zoi <- function(mod, variable, season, separator = "_") {
   ############
   # change that later, it is too bad - here and below
   # trick because name of variables changed
-  for(ss in c("summer", "winter"))
-    for(tp in c("high", "low"))
+  for(ss in c("summer", "winter")) {
+    for(tp in c("high", "low")) {
       if(length(ind <- grep(paste0("roads_", ss, "_", tp), variable)) > 0) {
         variable_orig <- c(variable_orig, gsub(pattern = "res_", replacement = "", variable_orig[ind]))
         variable <- c(variable,
                       sub(paste0("roads_", ss), paste0(ss, "_roads"), variable[ind]) |>
                         gsub(pattern = "res_", replacement = ""))
-      }#cov_sub[ind] <- paste0("roads_", ss, "_", tp, "_cross")
+      }
+      if(season == "win" & ss == "winter" & model == "suit" & length(ind <- grep(paste0("pub_cabins_", ss, "_", tp), variable)) > 0) {
+        variable_orig <- c(variable_orig, gsub(pattern = "", replacement = "", variable_orig[ind]))
+        variable <- c(variable,
+                      gsub(pattern = paste0(ss, "_", tp), replacement = "win", variable[ind]))
+      }
+    }
+  }
+
+  #cov_sub[ind] <- paste0("roads_", ss, "_", tp, "_cross")
   # if(any(grepl(paste0("roads_", ss, "_", tp), variable))) variable <- c(variable, paste0(ss, "_roads_", tp))
+
+  # # adding pub_cabins_ for winter
+  # variable <- c(variable, )
 
   # subset the ones of interest
   cov_sub <- grep(paste0(variable, collapse = "|"), covars, value = T)
@@ -75,10 +95,17 @@ model_get_zoi <- function(mod, variable, season, separator = "_") {
   #############
   # change that later, it is too bad - here and up there
   # trick because name of variables changed
-  for(ss in c("summer", "winter"))
-    for(tp in c("high", "low"))
+  for(ss in c("summer", "winter")) {
+    for(tp in c("high", "low")) {
       if(length(ind <- grep(paste0(ss, "_roads_", tp), var_out)) > 0)
         var_out[ind] <- sub(paste0(ss, "_roads"), paste0("roads_", ss), var_out[ind])
+      if(length(ind <- grep(paste0("pub_cabins_win"), var_out)) > 0)
+        for(ii in ind)
+          if(season == "win" & model == "suit" & grepl(paste0(ss, "_", tp), var_orig_out[ii]))
+            var_out[ii] <- sub(paste0("_win$"), paste0("_winter", "_", tp), var_out[ii])
+    }
+  }
+
   # set order
   ord <- unlist(ord[found])
 

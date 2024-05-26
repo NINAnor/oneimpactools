@@ -4,7 +4,7 @@
 \alias{model_get_zoi}
 \title{Get ZOI radius from covariates in a model}
 \usage{
-model_get_zoi(mod, variable, season, separator = "_")
+model_get_zoi(mod, variable, season, model, separator = "_")
 }
 \arguments{
 \item{mod}{Model.}

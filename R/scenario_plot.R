@@ -18,6 +18,12 @@ scenario_plot_vect <- function(vects, add = TRUE,
 
   # identify NAs
   isthere <- !is.na(vects)
+  # identify tables with zero rows
+  zero_rows <- sapply(vects, nrow)
+  zero_rows <- sapply(zero_rows, function(x) ifelse(is.null(x), TRUE, x < 1))
+
+  # update
+  isthere <- isthere & !zero_rows
 
   lims <- sapply(vects[isthere], function(x) x |> sf::st_as_sf() |>
            st_bbox())

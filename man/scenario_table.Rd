@@ -19,8 +19,11 @@ scenario_table_create(
   study_area = NA,
   sub_area = NA,
   species = NA,
+  intra_inter_season = c("intra", "inter")[1],
   season = NA,
-  intra_inter_season = c("intra", "inter", "all")[1],
+  season_suit_s = NA,
+  season_suit_t = NA,
+  season_perm = NA,
   baseline = NA,
   combination = NA,
   description = NA,
@@ -56,11 +59,14 @@ scenario_table_create(
   modified_vector_pol = NA,
   modified_raster = NA,
   modified_env_layers = NA,
-  modified_var_names_suit = NA,
+  modified_var_names_suit_s = NA,
+  modified_var_names_suit_t = NA,
   modified_var_names_perm = NA,
-  zoi_radii_suit = NA,
+  zoi_radii_suit_s = NA,
+  zoi_radii_suit_t = NA,
   zoi_radii_perm = NA,
-  baseline_max_suit = NA,
+  baseline_max_suit_s = NA,
+  baseline_max_suit_t = NA,
   baseline_max_perm = NA,
   scenario_folder_path = NA,
   scenario_map_prefix = NA
@@ -79,8 +85,11 @@ scenario_table_update(
   study_area = NA,
   sub_area = NA,
   species = NA,
-  season = NA,
   intra_inter_season = NA,
+  season = NA,
+  season_suit_s = NA,
+  season_suit_t = NA,
+  season_perm = NA,
   baseline = NA,
   combination = NA,
   description = NA,
@@ -116,11 +125,14 @@ scenario_table_update(
   modified_vector_pol = NA,
   modified_raster = NA,
   modified_env_layers = NA,
-  modified_var_names_suit = NA,
+  modified_var_names_suit_s = NA,
+  modified_var_names_suit_t = NA,
   modified_var_names_perm = NA,
-  zoi_radii_suit = NA,
+  zoi_radii_suit_s = NA,
+  zoi_radii_suit_t = NA,
   zoi_radii_perm = NA,
-  baseline_max_suit = NA,
+  baseline_max_suit_s = NA,
+  baseline_max_suit_t = NA,
   baseline_max_perm = NA,
   scenario_folder_path = NA,
   scenario_map_prefix = NA,
@@ -139,8 +151,11 @@ scenario_table_add(
   study_area = NA,
   sub_area = NA,
   species = NA,
+  intra_inter_season = NA,
   season = NA,
-  intra_inter_season = c("intra", "inter", "all")[1],
+  season_suit_s = NA,
+  season_suit_t = NA,
+  season_perm = NA,
   baseline = NA,
   combination = NA,
   description = NA,
@@ -176,11 +191,14 @@ scenario_table_add(
   modified_vector_pol = NA,
   modified_raster = NA,
   modified_env_layers = NA,
-  modified_var_names_suit = NA,
+  modified_var_names_suit_s = NA,
+  modified_var_names_suit_t = NA,
   modified_var_names_perm = NA,
-  zoi_radii_suit = NA,
+  zoi_radii_suit_s = NA,
+  zoi_radii_suit_t = NA,
   zoi_radii_perm = NA,
-  baseline_max_suit = NA,
+  baseline_max_suit_s = NA,
+  baseline_max_suit_t = NA,
   baseline_max_perm = NA,
   scenario_folder_path = NA,
   scenario_map_prefix = NA
@@ -221,13 +239,13 @@ reference within the study area where the proposed local changes are made.}
 
 \item{species}{\verb{[character(1)=NA]} \cr Species name.}
 
-\item{season}{\verb{[character(1)=NA]} \cr Season(s). It can be either one season
-if \code{intra_inter_season = "intra"} or two seasons if \code{intra_inter_season = "inter"}
-or \code{"all"}.}
-
 \item{intra_inter_season}{\verb{[character(1)="inter"]}{"intra", "inter", "all"} \cr
 Whether the scenario is looking at connectivity within season (\code{"intra"}),
 between seasons (\code{"inter"}), or both.}
+
+\item{season}{\verb{[character(1)=NA]} \cr Season(s). It can be either one season
+if \code{intra_inter_season = "intra"} or two seasons if \code{intra_inter_season = "inter"}
+or \code{"all"}.}
 
 \item{description}{\verb{[character(1)=NA]} \cr Textual description of the model.}
 

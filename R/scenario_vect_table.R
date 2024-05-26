@@ -244,31 +244,48 @@ scenario_vect_get_values <- function(vects, select = NULL) {
 
 #' @export
 scenario_vect_subset <- function(vects, s_gid = 1,
+                                 season = "calving",
                                  baseline = TRUE) {
+
+  # set season in short form
+  seas <- ifelse(grepl("Vinter|Winter|Win", season, ignore.case = TRUE), "win",
+                 ifelse(grepl("Kalving|Calving|Cal", season, ignore.case = TRUE), "cal", "sum"))
 
   # for each vector type
   feats <- list()
   for(j in seq_along(vects)) {
 
+    # get vector
     v <- vects[[j]]
 
     # for terra objects
     if(class(v) == "SpatVector") {
-      # subset
 
-      # if it is baseline scenario
-      if(baseline) {
-        feats[[j]] <- terra::subset(v, (v$s_gid %in% s_gid | (v$changebase != "" & !is.na(v$changebase))))
-      } else{
-        # if not
-        bas <- terra::subset(v, v$changebase != "" & !is.na(v$changebase))
-        bas <- terra::subset(bas, !(bas$s_gid %in% s_gid &
-                                      ((bas$changebase == "add" & bas$change == "remove") |
-                                         (bas$changebase == "remove" & bas$change == "add"))))
-        scen <- terra::subset(v, (v$s_gid %in% s_gid))
-        feat <- rbind(bas, scen)
-        feats[[j]] <- feat
-      }
+      # subset season and get all scenarios related to the features
+      v <- v |>
+        sf::st_as_sf() |>
+        dplyr::mutate(repeated = sub("sgid=", "", repeated)) |>
+        tidyr::separate_wider_delim(repeated, delim = ",", names_sep = "", too_few = "align_start") |>
+        dplyr::filter(grepl(seas, season)) |>
+        sf::st_as_sf() |>
+        terra::vect()
+
+      # subset feature in each scenario
+      feats[[j]] <- terra::subset(v, (v$s_gid %in% s_gid | (v$repeated1 %in% s_gid | v$repeated2 %in% s_gid | v$repeated3 %in% s_gid) |
+                                       (!is.na(v$changebase) & v$changebase != "")))
+      # # if it is baseline scenario
+      # if(baseline) {
+      #   feats[[j]] <- terra::subset(v, (v$s_gid %in% s_gid | (v$changebase != "" & !is.na(v$changebase))))
+      # } else{
+      #   # if not
+      #   bas <- terra::subset(v, v$changebase != "" & !is.na(v$changebase))
+      #   bas <- terra::subset(bas, !(bas$s_gid %in% s_gid &
+      #                                 ((bas$changebase == "add" & bas$change == "remove") |
+      #                                    (bas$changebase == "remove" & bas$change == "add"))))
+      #   scen <- terra::subset(v, (v$s_gid %in% s_gid))
+      #   feat <- rbind(bas, scen)
+      #   feats[[j]] <- feat
+      # }
     } else {
 
       # for NA (non modified) types of features
